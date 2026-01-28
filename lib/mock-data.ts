@@ -1,0 +1,892 @@
+import type {
+  User,
+  Casting,
+  CastingApplication,
+  Conversation,
+  Message,
+  JobOffer,
+  Post,
+  CastingRoom,
+  RoomEvent,
+  RoomFile,
+  RoomScheduleItem,
+  Notification,
+  UserLimits,
+} from "./types"
+
+export const mockUsers: User[] = [
+  {
+    id: "1",
+    email: "sofia@luxlane.com",
+    name: "Sofia Laurent",
+    username: "sofialaurent",
+    role: "model",
+    verified: true,
+    verificationLevel: "luxlane_verified",
+    avatar: "/professional-model-headshot-woman-brunette.jpg",
+    bio: "International runway model. Paris, Milan, NYC. Represented by Elite Models.",
+    location: "Paris, France",
+    followers: 245000,
+    following: 892,
+    createdAt: new Date("2023-01-15"),
+    measurements: {
+      height: "180 cm",
+      bust: "81 cm",
+      waist: "61 cm",
+      hips: "86 cm",
+      shoeSize: "40 EU",
+      hairColor: "Brunette",
+      eyeColor: "Green",
+      heightCm: 180,
+    },
+    portfolio: [
+      "/high-fashion-editorial-model.jpg",
+      "/runway-fashion-week-model.jpg",
+      "/luxury-brand-campaign-model.jpg",
+    ],
+    polaroids: ["/model-polaroid-front.jpg", "/model-polaroid-profile.jpg", "/model-polaroid-full-body.jpg"],
+    experience: ["Dior SS24", "Chanel Resort", "Prada FW23", "Valentino Couture"],
+    tags: ["runway", "editorial", "high-fashion", "couture"],
+    metrics: {
+      luxlaneScore: 94,
+      rank: 12,
+      rankTier: "top50",
+      trend: "up",
+      trendChange: 5,
+      components: {
+        bookings: 28,
+        shortlists: 45,
+        profileViews: 12500,
+        responseRate: 98,
+        reliability: 100,
+      },
+      achievements: ["Top Model Paris", "10+ Bookings", "Perfect Reliability"],
+      lastUpdated: new Date(),
+    },
+    digitalTwin: {
+      id: "dt1",
+      modelId: "1",
+      status: "complete",
+      createdAt: new Date("2024-01-10"),
+      updatedAt: new Date("2024-01-10"),
+      headScan: "/3d-head-scan.jpg",
+      fullBodyScan: "/3d-body-scan.jpg",
+      attributes: {
+        faceShape: "Oval",
+        skinTone: "Light",
+        eyeColor: "Green",
+        jawline: "Defined",
+        cheekbones: "High",
+        noseType: "Straight",
+        lipShape: "Full",
+        preciseHeight: "180.2 cm",
+        preciseChest: "81.5 cm",
+        preciseWaist: "60.8 cm",
+        preciseHips: "86.2 cm",
+        shoulderWidth: "42.1 cm",
+        armLength: "76.3 cm",
+        legLength: "112.5 cm",
+      },
+    },
+  },
+  {
+    id: "2",
+    email: "maison@dior.com",
+    name: "Maison Dior",
+    username: "dior",
+    role: "brand",
+    verified: true,
+    verificationLevel: "luxlane_verified",
+    avatar: "/dior-luxury-fashion-brand-logo-minimal.jpg",
+    bio: "Maison Christian Dior. Haute Couture, Ready-to-Wear, Beauty.",
+    location: "Paris, France",
+    followers: 12500000,
+    following: 156,
+    createdAt: new Date("2022-06-01"),
+    companyName: "Christian Dior SE",
+    website: "https://dior.com",
+    industry: "Luxury Fashion",
+    tags: ["haute-couture", "luxury", "high-fashion"],
+  },
+  {
+    id: "3",
+    email: "contact@elitemodels.com",
+    name: "Elite Model Management",
+    username: "elitemodels",
+    role: "agency",
+    verified: true,
+    verificationLevel: "luxlane_verified",
+    avatar: "/elite-models-agency-logo-professional-minimal.jpg",
+    bio: "The world's leading model management agency. Discovering beauty since 1972.",
+    location: "New York, NY",
+    followers: 3200000,
+    following: 4521,
+    createdAt: new Date("2022-03-10"),
+    companyName: "Elite Model Management",
+    website: "https://elitemodel.com",
+    roster: ["1", "5", "6"],
+    industry: "Talent Management",
+  },
+  {
+    id: "4",
+    email: "alexander@vogue.com",
+    name: "Alexander Chen",
+    username: "alexanderchen",
+    role: "client",
+    verified: true,
+    verificationLevel: "agency_verified",
+    avatar: "/professional-photographer-portrait-man.jpg",
+    bio: "Fashion Photographer. Vogue, Harper's Bazaar, Elle.",
+    location: "Los Angeles, CA",
+    followers: 89000,
+    following: 1245,
+    createdAt: new Date("2023-04-20"),
+    companyName: "Chen Studios",
+    website: "https://alexanderchen.com",
+    industry: "Photography",
+  },
+  {
+    id: "5",
+    email: "bella@luxlane.com",
+    name: "Isabella Rossi",
+    username: "isabellarossi",
+    role: "model",
+    verified: true,
+    verificationLevel: "agency_verified",
+    avatar: "/professional-model-headshot-woman-italian-dark-hai.jpg",
+    bio: "Milan Fashion Week regular. Gucci, Prada, Versace.",
+    location: "Milan, Italy",
+    followers: 156000,
+    following: 634,
+    createdAt: new Date("2023-06-12"),
+    measurements: {
+      height: "178 cm",
+      bust: "84 cm",
+      waist: "61 cm",
+      hips: "89 cm",
+      shoeSize: "39 EU",
+      hairColor: "Black",
+      eyeColor: "Brown",
+      heightCm: 178,
+    },
+    experience: ["Gucci FW24", "Prada SS24", "Versace Resort"],
+    tags: ["runway", "editorial", "commercial"],
+    metrics: {
+      luxlaneScore: 87,
+      rank: 45,
+      rankTier: "top50",
+      trend: "up",
+      trendChange: 12,
+      components: {
+        bookings: 18,
+        shortlists: 32,
+        profileViews: 8900,
+        responseRate: 95,
+        reliability: 98,
+      },
+      achievements: ["Rising Star", "5+ Bookings"],
+      lastUpdated: new Date(),
+    },
+  },
+  {
+    id: "6",
+    email: "maya@luxlane.com",
+    name: "Maya Williams",
+    username: "mayawilliams",
+    role: "model",
+    verified: false,
+    verificationLevel: "unverified",
+    avatar: "/young-model-headshot-woman-blonde-natural.jpg",
+    bio: "Aspiring model. NYC based. Open to collaborations.",
+    location: "Brooklyn, NY",
+    followers: 2400,
+    following: 890,
+    createdAt: new Date("2024-01-05"),
+    measurements: {
+      height: "175 cm",
+      bust: "81 cm",
+      waist: "64 cm",
+      hips: "89 cm",
+      shoeSize: "38 EU",
+      hairColor: "Blonde",
+      eyeColor: "Blue",
+      heightCm: 175,
+    },
+    tags: ["commercial", "lifestyle"],
+    metrics: {
+      luxlaneScore: 42,
+      rank: 890,
+      rankTier: "new",
+      trend: "up",
+      trendChange: 3,
+      components: {
+        bookings: 0,
+        shortlists: 2,
+        profileViews: 450,
+        responseRate: 100,
+        reliability: 100,
+      },
+      achievements: ["New Member"],
+      lastUpdated: new Date(),
+    },
+  },
+  {
+    id: "7",
+    email: "info@gucci.com",
+    name: "Gucci",
+    username: "gucci",
+    role: "brand",
+    verified: true,
+    verificationLevel: "luxlane_verified",
+    avatar: "/gucci-luxury-fashion-brand-logo-minimal.jpg",
+    bio: "Founded in Florence in 1921, Gucci is one of the world's leading luxury fashion brands.",
+    location: "Florence, Italy",
+    followers: 52000000,
+    following: 89,
+    createdAt: new Date("2022-01-01"),
+    companyName: "Gucci",
+    website: "https://gucci.com",
+    industry: "Luxury Fashion",
+    tags: ["luxury", "high-fashion", "avant-garde"],
+  },
+  {
+    id: "8",
+    email: "lena@luxlane.com",
+    name: "Lena Petrova",
+    username: "lenapetrova",
+    role: "model",
+    verified: true,
+    verificationLevel: "luxlane_verified",
+    avatar: "/model-headshot-blonde-european.jpg",
+    bio: "Top 10 Luxlane Model. Specializing in haute couture and runway.",
+    location: "Moscow, Russia",
+    followers: 520000,
+    following: 345,
+    createdAt: new Date("2022-08-20"),
+    measurements: {
+      height: "182 cm",
+      bust: "80 cm",
+      waist: "59 cm",
+      hips: "87 cm",
+      shoeSize: "41 EU",
+      hairColor: "Blonde",
+      eyeColor: "Blue",
+      heightCm: 182,
+    },
+    experience: ["Chanel Couture", "Louis Vuitton", "Balenciaga", "Saint Laurent"],
+    tags: ["runway", "couture", "high-fashion", "editorial"],
+    metrics: {
+      luxlaneScore: 98,
+      rank: 3,
+      rankTier: "top10",
+      trend: "stable",
+      trendChange: 0,
+      components: {
+        bookings: 52,
+        shortlists: 78,
+        profileViews: 45000,
+        responseRate: 100,
+        reliability: 100,
+      },
+      achievements: ["Top 10 Global", "50+ Bookings", "Perfect Score"],
+      lastUpdated: new Date(),
+    },
+    digitalTwin: {
+      id: "dt2",
+      modelId: "8",
+      status: "complete",
+      createdAt: new Date("2024-01-05"),
+      updatedAt: new Date("2024-01-05"),
+      attributes: {
+        faceShape: "Heart",
+        skinTone: "Fair",
+        eyeColor: "Blue",
+        jawline: "Angular",
+        cheekbones: "Prominent",
+        noseType: "Straight",
+        lipShape: "Thin",
+        preciseHeight: "182.4 cm",
+        preciseChest: "80.2 cm",
+        preciseWaist: "58.9 cm",
+        preciseHips: "87.1 cm",
+        shoulderWidth: "43.2 cm",
+        armLength: "78.1 cm",
+        legLength: "115.2 cm",
+      },
+    },
+  },
+]
+
+export const mockCastings: Casting[] = [
+  {
+    id: "c1",
+    creatorId: "2",
+    creator: mockUsers[1],
+    title: "Dior Spring 2025 Campaign",
+    type: "campaign",
+    description:
+      "Seeking diverse female models for our upcoming Spring 2025 campaign. Shot by Steven Meisel in Paris. Looking for confident, editorial-ready talent.",
+    location: "Paris, France",
+    dates: { start: new Date("2024-03-15"), end: new Date("2024-03-20") },
+    pay: { amount: 15000, currency: "EUR", type: "flat" },
+    requirements: {
+      gender: "female",
+      heightRange: { min: "175 cm", max: "185 cm" },
+      heightRangeCm: { min: 175, max: 185 },
+      experience: ["runway", "editorial"],
+      look: ["editorial", "high fashion"],
+      tags: ["runway", "editorial", "high-fashion"],
+    },
+    deadline: new Date("2024-02-28"),
+    status: "open",
+    applicationsCount: 45,
+    shortlistedCount: 8,
+    createdAt: new Date("2024-01-15"),
+    images: ["/dior-fashion-campaign-spring-aesthetic.jpg"],
+    settings: {
+      verifiedOnly: true,
+      maxSubmissionsPerAgency: 5,
+      requireDigitalTwin: false,
+    },
+    roomId: "room1",
+  },
+  {
+    id: "c2",
+    creatorId: "7",
+    creator: mockUsers[6],
+    title: "Gucci Milan Fashion Week",
+    type: "runway",
+    description:
+      "Open casting for Gucci FW25 runway show in Milan. Looking for unique, bold faces that embody the Gucci aesthetic.",
+    location: "Milan, Italy",
+    dates: { start: new Date("2024-02-20"), end: new Date("2024-02-21") },
+    pay: { amount: 5000, currency: "EUR", type: "flat" },
+    requirements: {
+      gender: "any",
+      heightRange: { min: "178 cm", max: "188 cm" },
+      heightRangeCm: { min: 178, max: 188 },
+      experience: ["runway"],
+      look: ["avant-garde", "unique"],
+      tags: ["runway", "avant-garde"],
+    },
+    deadline: new Date("2024-02-10"),
+    status: "open",
+    applicationsCount: 120,
+    shortlistedCount: 24,
+    createdAt: new Date("2024-01-20"),
+    images: ["/gucci-fashion-show-runway-aesthetic.jpg"],
+    settings: {
+      verifiedOnly: false,
+      maxSubmissionsPerAgency: 10,
+      requireDigitalTwin: false,
+    },
+  },
+  {
+    id: "c3",
+    creatorId: "4",
+    creator: mockUsers[3],
+    title: "Vogue Italia Editorial",
+    type: "editorial",
+    description:
+      "Editorial shoot for Vogue Italia March issue. Theme: Modern Renaissance. Looking for models with classic, timeless features.",
+    location: "Florence, Italy",
+    dates: { start: new Date("2024-02-05"), end: new Date("2024-02-07") },
+    pay: { amount: 3500, currency: "EUR", type: "flat" },
+    requirements: {
+      gender: "female",
+      ageRange: { min: 18, max: 35 },
+      look: ["classic", "elegant"],
+      tags: ["editorial", "classic"],
+    },
+    deadline: new Date("2024-01-30"),
+    status: "open",
+    applicationsCount: 67,
+    shortlistedCount: 5,
+    createdAt: new Date("2024-01-10"),
+    images: ["/vogue-editorial-renaissance.jpg"],
+    settings: {
+      verifiedOnly: true,
+      maxSubmissionsPerAgency: 3,
+      requireDigitalTwin: true,
+    },
+  },
+  {
+    id: "c4",
+    creatorId: "3",
+    creator: mockUsers[2],
+    title: "Elite New Faces 2024",
+    type: "event",
+    description:
+      "Annual scouting event for new talent. If you're 16-22 and dream of a modeling career, this is your chance to be discovered by top agents.",
+    location: "New York, NY",
+    dates: { start: new Date("2024-03-01"), end: new Date("2024-03-01") },
+    pay: { amount: 0, currency: "USD", type: "tbd" },
+    requirements: {
+      ageRange: { min: 16, max: 22 },
+      other: "No experience necessary. Bring polaroids and comp card if available.",
+    },
+    deadline: new Date("2024-02-25"),
+    status: "open",
+    applicationsCount: 340,
+    shortlistedCount: 0,
+    createdAt: new Date("2024-01-25"),
+    images: ["/model-casting-event.jpg"],
+    settings: {
+      verifiedOnly: false,
+      maxSubmissionsPerAgency: 20,
+      requireDigitalTwin: false,
+    },
+  },
+]
+
+export const mockApplications: CastingApplication[] = [
+  {
+    id: "a1",
+    castingId: "c1",
+    casting: mockCastings[0],
+    modelId: "1",
+    model: mockUsers[0],
+    status: "shortlisted",
+    message:
+      "Excited to be part of this campaign. I have extensive experience with Dior and would love to continue our collaboration.",
+    portfolioSelection: ["/high-fashion-editorial-model.jpg", "/runway-fashion-week-model.jpg"],
+    submittedAt: new Date("2024-01-16"),
+    updatedAt: new Date("2024-01-18"),
+  },
+  {
+    id: "a2",
+    castingId: "c2",
+    casting: mockCastings[1],
+    modelId: "1",
+    model: mockUsers[0],
+    status: "pending",
+    message: "I would be honored to walk for Gucci at Milan Fashion Week.",
+    portfolioSelection: ["/runway-fashion-week-model.jpg"],
+    submittedAt: new Date("2024-01-21"),
+    updatedAt: new Date("2024-01-21"),
+  },
+  {
+    id: "a3",
+    castingId: "c1",
+    casting: mockCastings[0],
+    modelId: "5",
+    model: mockUsers[4],
+    status: "pending",
+    message: "I bring a fresh Italian perspective to high fashion campaigns.",
+    submittedAt: new Date("2024-01-17"),
+    updatedAt: new Date("2024-01-17"),
+  },
+  {
+    id: "a4",
+    castingId: "c1",
+    casting: mockCastings[0],
+    modelId: "8",
+    model: mockUsers[7],
+    status: "shortlisted",
+    message: "Ready to bring elegance and precision to your campaign.",
+    submittedAt: new Date("2024-01-16"),
+    updatedAt: new Date("2024-01-19"),
+  },
+]
+
+export const mockJobOffers: JobOffer[] = [
+  {
+    id: "o1",
+    castingId: "c1",
+    casting: mockCastings[0],
+    senderId: "2",
+    sender: mockUsers[1],
+    modelId: "1",
+    model: mockUsers[0],
+    title: "Dior Spring 2025 Campaign - Lead Model",
+    description:
+      "We are pleased to offer you the lead model position for our Spring 2025 campaign. The shoot will take place over 5 days in Paris.",
+    dates: { start: new Date("2024-03-15"), end: new Date("2024-03-20") },
+    pay: { amount: 25000, currency: "EUR", type: "flat" },
+    location: "Paris, France",
+    status: "pending",
+    expiresAt: new Date("2024-02-15"),
+    createdAt: new Date("2024-02-01"),
+  },
+]
+
+export const mockConversations: Conversation[] = [
+  {
+    id: "conv1",
+    participants: [mockUsers[0], mockUsers[1]],
+    lastMessage: {
+      id: "m1",
+      conversationId: "conv1",
+      senderId: "2",
+      content: "Congratulations! You've been selected for the Dior Spring 2025 campaign.",
+      type: "casting_invite",
+      metadata: { castingId: "c1" },
+      read: false,
+      createdAt: new Date("2024-02-01T10:00:00"),
+    },
+    unreadCount: 1,
+    updatedAt: new Date("2024-02-01T10:00:00"),
+    type: "casting",
+  },
+  {
+    id: "conv2",
+    participants: [mockUsers[0], mockUsers[3]],
+    lastMessage: {
+      id: "m2",
+      conversationId: "conv2",
+      senderId: "4",
+      content: "The mood board for the Vogue shoot is ready. Let me know your thoughts.",
+      type: "text",
+      read: true,
+      createdAt: new Date("2024-01-30T15:30:00"),
+    },
+    unreadCount: 0,
+    updatedAt: new Date("2024-01-30T15:30:00"),
+    type: "direct",
+  },
+  {
+    id: "conv3",
+    participants: [mockUsers[0], mockUsers[2]],
+    lastMessage: {
+      id: "m3",
+      conversationId: "conv3",
+      senderId: "3",
+      content: "Your updated comp card is ready for review. Please approve before we send to clients.",
+      type: "text",
+      read: true,
+      createdAt: new Date("2024-01-28T11:00:00"),
+    },
+    unreadCount: 0,
+    updatedAt: new Date("2024-01-28T11:00:00"),
+    type: "direct",
+  },
+]
+
+export const mockMessages: Message[] = [
+  {
+    id: "m1-1",
+    conversationId: "conv1",
+    senderId: "2",
+    content: "We loved your application for the Spring 2025 campaign.",
+    type: "text",
+    read: true,
+    createdAt: new Date("2024-01-31T14:00:00"),
+  },
+  {
+    id: "m1-2",
+    conversationId: "conv1",
+    senderId: "2",
+    content: "Congratulations! You've been selected for the Dior Spring 2025 campaign.",
+    type: "casting_invite",
+    metadata: { castingId: "c1" },
+    read: false,
+    createdAt: new Date("2024-02-01T10:00:00"),
+  },
+]
+
+export const mockPosts: Post[] = [
+  {
+    id: "p1",
+    userId: "1",
+    user: mockUsers[0],
+    type: "photo",
+    media: ["/high-fashion-editorial-model.jpg"],
+    caption: "Behind the scenes from yesterday's Dior shoot. Thank you to the incredible team.",
+    likes: 12453,
+    comments: 234,
+    bookmarked: false,
+    liked: false,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4),
+    tags: ["behindthescenes", "dior", "fashion"],
+  },
+  {
+    id: "p2",
+    userId: "2",
+    user: mockUsers[1],
+    type: "photo",
+    media: ["/dior-fashion-campaign-spring-aesthetic.jpg"],
+    caption: "Spring 2025. A new chapter begins. #DiorSS25",
+    likes: 89234,
+    comments: 1245,
+    bookmarked: true,
+    liked: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8),
+    tags: ["diorss25", "spring2025", "campaign"],
+  },
+  {
+    id: "p3",
+    userId: "5",
+    user: mockUsers[4],
+    type: "photo",
+    media: ["/runway-fashion-week-model.jpg"],
+    caption: "Milan Fashion Week finale walk. Dreams do come true.",
+    likes: 8921,
+    comments: 156,
+    bookmarked: false,
+    liked: false,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+    tags: ["milanfashionweek", "runway", "mfw"],
+  },
+  {
+    id: "p4",
+    userId: "1",
+    user: mockUsers[0],
+    type: "photo",
+    media: ["/luxury-brand-campaign-model.jpg"],
+    caption: "New campaign dropping soon. Stay tuned.",
+    likes: 15678,
+    comments: 312,
+    bookmarked: true,
+    liked: false,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48),
+    tags: ["campaign", "comingsoon"],
+  },
+  {
+    id: "p5",
+    userId: "7",
+    user: mockUsers[6],
+    type: "photo",
+    media: ["/gucci-fashion-show-runway-aesthetic.jpg"],
+    caption: "Gucci FW25 - Embracing the extraordinary.",
+    likes: 156000,
+    comments: 2341,
+    bookmarked: false,
+    liked: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72),
+    tags: ["gucci", "fw25", "fashionshow"],
+  },
+]
+
+// Casting Rooms
+export const mockCastingRooms: CastingRoom[] = [
+  {
+    id: "room1",
+    castingId: "c1",
+    casting: mockCastings[0],
+    status: "live",
+    members: [mockUsers[1], mockUsers[0], mockUsers[7]],
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2024-02-01"),
+  },
+]
+
+export const mockRoomEvents: RoomEvent[] = [
+  {
+    id: "re1",
+    roomId: "room1",
+    type: "created",
+    userId: "2",
+    user: mockUsers[1],
+    createdAt: new Date("2024-01-15T09:00:00"),
+  },
+  {
+    id: "re2",
+    roomId: "room1",
+    type: "submission",
+    userId: "1",
+    user: mockUsers[0],
+    message: "Application submitted",
+    createdAt: new Date("2024-01-16T14:30:00"),
+  },
+  {
+    id: "re3",
+    roomId: "room1",
+    type: "shortlisted",
+    userId: "2",
+    user: mockUsers[1],
+    targetUserId: "1",
+    targetUser: mockUsers[0],
+    createdAt: new Date("2024-01-18T10:00:00"),
+  },
+  {
+    id: "re4",
+    roomId: "room1",
+    type: "member_added",
+    userId: "2",
+    user: mockUsers[1],
+    targetUserId: "1",
+    targetUser: mockUsers[0],
+    createdAt: new Date("2024-01-20T11:00:00"),
+  },
+  {
+    id: "re5",
+    roomId: "room1",
+    type: "message",
+    userId: "2",
+    user: mockUsers[1],
+    message: "Welcome to the casting room! Please review the call sheet.",
+    createdAt: new Date("2024-01-20T11:05:00"),
+  },
+]
+
+export const mockRoomFiles: RoomFile[] = [
+  {
+    id: "rf1",
+    roomId: "room1",
+    name: "Spring 2025 Moodboard",
+    type: "moodboard",
+    url: "/fashion-moodboard.jpg",
+    uploadedBy: mockUsers[1],
+    createdAt: new Date("2024-01-16"),
+  },
+  {
+    id: "rf2",
+    roomId: "room1",
+    name: "Call Sheet - Day 1",
+    type: "callsheet",
+    url: "/call-sheet-document.jpg",
+    uploadedBy: mockUsers[1],
+    createdAt: new Date("2024-02-01"),
+  },
+]
+
+export const mockRoomSchedule: RoomScheduleItem[] = [
+  {
+    id: "rs1",
+    roomId: "room1",
+    title: "Fitting Session",
+    date: new Date("2024-03-14"),
+    time: "10:00 AM",
+    location: "Dior Atelier, Paris",
+    notes: "Bring polaroids and comp card",
+  },
+  {
+    id: "rs2",
+    roomId: "room1",
+    title: "Shoot Day 1",
+    date: new Date("2024-03-15"),
+    time: "7:00 AM",
+    location: "Studio Harcourt, Paris",
+  },
+]
+
+// Notifications
+export const mockNotifications: Notification[] = [
+  {
+    id: "n1",
+    userId: "1",
+    type: "offer",
+    title: "New Job Offer",
+    message: "Dior has sent you an offer for Spring 2025 Campaign",
+    read: false,
+    actionUrl: "/offers/o1",
+    metadata: { castingId: "c1" },
+    createdAt: new Date("2024-02-01T10:00:00"),
+  },
+  {
+    id: "n2",
+    userId: "1",
+    type: "shortlisted",
+    title: "You've been shortlisted!",
+    message: "Congratulations! You've been shortlisted for Dior Spring 2025 Campaign",
+    read: true,
+    metadata: { castingId: "c1" },
+    createdAt: new Date("2024-01-18T10:00:00"),
+  },
+  {
+    id: "n3",
+    userId: "1",
+    type: "casting_invite",
+    title: "Casting Invitation",
+    message: "Gucci has invited you to apply for Milan Fashion Week",
+    read: true,
+    metadata: { castingId: "c2" },
+    createdAt: new Date("2024-01-20T09:00:00"),
+  },
+  {
+    id: "n4",
+    userId: "1",
+    type: "room_update",
+    title: "Casting Room Update",
+    message: "New files added to Dior Spring 2025 casting room",
+    read: false,
+    metadata: { roomId: "room1" },
+    createdAt: new Date("2024-02-01T11:00:00"),
+  },
+]
+
+// User Limits (anti-spam)
+export const mockUserLimits: UserLimits[] = [
+  {
+    userId: "1",
+    weeklyApplications: 3,
+    weeklyApplicationsMax: 10,
+    weekStartDate: new Date("2024-01-29"),
+    castingSubmissions: {},
+  },
+  {
+    userId: "6",
+    weeklyApplications: 8,
+    weeklyApplicationsMax: 10,
+    weekStartDate: new Date("2024-01-29"),
+    castingSubmissions: {},
+  },
+]
+
+// Scoreboard data
+export const mockScoreboardData = {
+  topModels: [mockUsers[7], mockUsers[0], mockUsers[4]].map((u, i) => ({
+    ...u,
+    rank: i + 1,
+  })),
+  risingModels: [mockUsers[4], mockUsers[5]].map((u, i) => ({
+    ...u,
+    rank: i + 1,
+    trendChange: (i + 1) * 5,
+  })),
+  mostBooked: [mockUsers[7], mockUsers[0]],
+  mostShortlisted: [mockUsers[0], mockUsers[7], mockUsers[4]],
+}
+
+// Helper functions
+export function getCurrentUser(): User {
+  return mockUsers[0]
+}
+
+export function getUserById(id: string): User | undefined {
+  return mockUsers.find((u) => u.id === id)
+}
+
+export function getCastingById(id: string): Casting | undefined {
+  return mockCastings.find((c) => c.id === id)
+}
+
+export function getApplicationsForModel(modelId: string): CastingApplication[] {
+  return mockApplications.filter((a) => a.modelId === modelId)
+}
+
+export function getOffersForModel(modelId: string): JobOffer[] {
+  return mockJobOffers.filter((o) => o.modelId === modelId)
+}
+
+export function getCastingsForCreator(creatorId: string): Casting[] {
+  return mockCastings.filter((c) => c.creatorId === creatorId)
+}
+
+export function getRoomByCastingId(castingId: string): CastingRoom | undefined {
+  return mockCastingRooms.find((r) => r.castingId === castingId)
+}
+
+export function getRoomEvents(roomId: string): RoomEvent[] {
+  return mockRoomEvents.filter((e) => e.roomId === roomId)
+}
+
+export function getRoomFiles(roomId: string): RoomFile[] {
+  return mockRoomFiles.filter((f) => f.roomId === roomId)
+}
+
+export function getRoomSchedule(roomId: string): RoomScheduleItem[] {
+  return mockRoomSchedule.filter((s) => s.roomId === roomId)
+}
+
+export function getNotificationsForUser(userId: string): Notification[] {
+  return mockNotifications.filter((n) => n.userId === userId)
+}
+
+export function getUserLimits(userId: string): UserLimits | undefined {
+  return mockUserLimits.find((l) => l.userId === userId)
+}
+
+export function getModels(): User[] {
+  return mockUsers.filter((u) => u.role === "model")
+}

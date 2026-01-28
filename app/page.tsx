@@ -1,0 +1,240 @@
+"use client"
+
+import { useAuth } from "@/lib/auth-context"
+import { useNavigation } from "@/lib/navigation-context"
+import { OnboardingFlow } from "@/components/onboarding/onboarding-flow"
+import { BottomNav } from "@/components/layout/bottom-nav"
+import { Header } from "@/components/layout/header"
+import { HomeView } from "@/components/home/home-view"
+import { CastingsHub } from "@/components/castings/castings-hub"
+import { CastingDetail } from "@/components/castings/casting-detail"
+import { ModelsBrowse } from "@/components/models/models-browse"
+import { RosterView } from "@/components/models/roster-view"
+import { DiscoverView } from "@/components/model/discover-view"
+import { InboxView } from "@/components/model/inbox-view"
+import { ProfileView } from "@/components/model/profile-view"
+import { SettingsView } from "@/components/settings/settings-view"
+import { ScoreboardView } from "@/components/scoreboard/scoreboard-view"
+import { VerificationFlow } from "@/components/verification/verification-flow"
+import { CreateTwinFlow } from "@/components/digital-twin/create-twin-flow"
+import { CompareView } from "@/components/compare/compare-view"
+import { CastingRoomView } from "@/components/casting-room/casting-room"
+import { BrandDashboard } from "@/components/brand/brand-dashboard"
+import { mockConversations, getRoomByCastingId } from "@/lib/mock-data"
+
+export default function Home() {
+  const { isAuthenticated, user } = useAuth()
+  const {
+    currentView,
+    activeTab,
+    selectedCasting,
+    selectedProfile,
+    compareModels,
+    selectedRoom,
+    navigateTo,
+    setActiveTab,
+    goBack,
+  } = useNavigation()
+
+  const unreadCount = mockConversations.reduce((acc, c) => acc + c.unreadCount, 0)
+  const isBrandOrAgency = user?.role === "brand" || user?.role === "agency"
+
+  if (!isAuthenticated) {
+    return <OnboardingFlow onComplete={() => {}} />
+  }
+
+  // Verification flow - full screen
+  if (currentView === "verification") {
+    return <VerificationFlow onBack={() => navigateTo("settings")} onComplete={() => navigateTo("main")} />
+  }
+
+  // Create Digital Twin flow - full screen
+  if (currentView === "create-twin") {
+    return <CreateTwinFlow onBack={() => navigateTo("settings")} onComplete={() => navigateTo("own-profile")} />
+  }
+
+  // Scoreboard view - full screen with back
+  if (currentView === "scoreboard") {
+    return <ScoreboardView onBack={goBack} onViewProfile={(u) => navigateTo("profile", { profile: u })} />
+  }
+
+  // Compare view - full screen with back
+  if (currentView === "compare" && compareModels) {
+    return (
+      <CompareView
+        models={compareModels}
+        casting={selectedCasting || undefined}
+        onBack={goBack}
+        onViewProfile={(u) => navigateTo("profile", { profile: u })}
+      />
+    )
+  }
+
+  // Casting Room view - full screen with back
+  if (currentView === "casting-room" && selectedRoom) {
+    return (
+      <CastingRoomView
+        room={selectedRoom}
+        onBack={goBack}
+        onViewProfile={(u) => navigateTo("profile", { profile: u })}
+      />
+    )
+  }
+
+  // Settings view - full screen with back
+  if (currentView === "settings") {
+    return (
+      <SettingsView
+        onBack={goBack}
+        onOpenVerification={() => navigateTo("verification")}
+        onOpenDigitalTwin={() => navigateTo("create-twin")}
+      />
+    )
+  }
+
+  // Own profile view - with persistent nav
+  if (currentView === "own-profile") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header
+          title="Profile"
+          showLogo={false}
+          showSearch={false}
+          showAvatar={false}
+          showBack={true}
+          onSettingsClick={() => navigateTo("settings")}
+        />
+        <ProfileView isOwn onSettingsClick={() => navigateTo("settings")} />
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />
+      </div>
+    )
+  }
+
+  // Casting detail view - with persistent nav
+  if (currentView === "casting" && selectedCasting) {
+    const room = getRoomByCastingId(selectedCasting.id)
+    return (
+      <div className="min-h-screen bg-background">
+        <Header
+          title={selectedCasting.title}
+          showLogo={false}
+          showSearch={false}
+          showBack={true}
+          onAvatarClick={() => navigateTo("own-profile")}
+        />
+        <CastingDetail
+          casting={selectedCasting}
+          onBack={goBack}
+          onViewProfile={(u) => navigateTo("profile", { profile: u })}
+          onOpenRoom={room ? () => navigateTo("casting-room", { room, casting: selectedCasting }) : undefined}
+        />
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />
+      </div>
+    )
+  }
+
+  // Profile detail view (other user) - with persistent nav
+  if (currentView === "profile" && selectedProfile) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header
+          title={selectedProfile.name}
+          showLogo={false}
+          showSearch={false}
+          showBack={true}
+          onAvatarClick={() => navigateTo("own-profile")}
+        />
+        <ProfileView user={selectedProfile} isOwn={false} onMessageClick={() => setActiveTab("inbox")} />
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />
+      </div>
+    )
+  }
+
+  // Get the title for the header based on tab
+  const getHeaderTitle = () => {
+    switch (activeTab) {
+      case "castings":
+        return isBrandOrAgency ? "Command Center" : "Castings"
+      case "discover":
+        return "Discover"
+      case "models":
+        return "Models"
+      case "roster":
+        return "My Models"
+      case "inbox":
+        return "Inbox"
+      default:
+        return undefined
+    }
+  }
+
+  // Render the active tab content
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "home":
+        return (
+          <HomeView
+            onViewCasting={(casting) => navigateTo("casting", { casting })}
+            onViewProfile={(u) => navigateTo("profile", { profile: u })}
+            onViewCastingsHub={() => setActiveTab("castings")}
+            onViewScoreboard={() => navigateTo("scoreboard")}
+          />
+        )
+      case "castings":
+        if (isBrandOrAgency) {
+          return (
+            <BrandDashboard
+              onViewCasting={(casting) => navigateTo("casting", { casting })}
+              onViewProfile={(u) => navigateTo("profile", { profile: u })}
+            />
+          )
+        }
+        return <CastingsHub onViewCasting={(casting) => navigateTo("casting", { casting })} />
+      case "discover":
+        return (
+          <DiscoverView
+            onViewProfile={(u) => navigateTo("profile", { profile: u })}
+            onViewCasting={(casting) => navigateTo("casting", { casting })}
+          />
+        )
+      case "models":
+        return (
+          <ModelsBrowse
+            onViewProfile={(u) => navigateTo("profile", { profile: u })}
+            onCompare={(models) => navigateTo("compare", { models })}
+          />
+        )
+      case "roster":
+        return <RosterView onViewProfile={(u) => navigateTo("profile", { profile: u })} />
+      case "inbox":
+        return <InboxView />
+      default:
+        return null
+    }
+  }
+
+  // Brand/Agency castings tab shows BrandDashboard with its own header
+  if (activeTab === "castings" && isBrandOrAgency) {
+    return (
+      <BrandDashboard
+        onViewCasting={(casting) => navigateTo("casting", { casting })}
+        onViewProfile={(u) => navigateTo("profile", { profile: u })}
+        onBack={goBack}
+        bottomNav={<BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />}
+      />
+    )
+  }
+
+  // Main app shell with persistent header + bottom nav
+  return (
+    <div className="min-h-screen bg-background">
+      <Header
+        showLogo={activeTab === "home"}
+        title={getHeaderTitle()}
+        onAvatarClick={() => navigateTo("own-profile")}
+      />
+      {renderTabContent()}
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />
+    </div>
+  )
+}
