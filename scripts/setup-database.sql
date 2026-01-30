@@ -254,7 +254,7 @@ CREATE INDEX IF NOT EXISTS idx_media_assets_owner ON media_assets("ownerId", typ
 
 -- Digital twins table
 CREATE TABLE IF NOT EXISTS digital_twins (
-    "userId" UUID PRIMARY KEY REFERENCES model_profiles("userId") ON DELETE CASCADE,
+    "userId" UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     status twin_status DEFAULT 'NONE',
     summary JSONB,
     "previewUrl" TEXT,
