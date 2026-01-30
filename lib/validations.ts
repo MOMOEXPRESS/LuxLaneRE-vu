@@ -40,7 +40,14 @@ export const updateModelProfileSchema = z.object({
   eyes: z.string().max(50).optional(),
   languages: z.array(z.string()).optional(),
   availability: availabilityStatusEnum.optional(),
-  measurements: z.record(z.unknown()).optional(), // JSON for additional measurements
+  details: z
+    .object({
+      dressSize: z.string().max(20).optional(),
+      skinTone: z.string().max(50).optional(),
+      experience: z.array(z.string().max(100)).optional(),
+    })
+    .optional(),
+  measurements: z.record(z.unknown()).optional(), // JSON for additional measurements (legacy)
 })
 
 // Onboarding validations
@@ -123,9 +130,12 @@ export const mediaConfirmSchema = z.object({
   meta: z.record(z.unknown()).optional(),
 })
 
-// Settings validations
+// Settings validations (maps to UserSettings: pushNotifs, emailNotifs, darkMode, privacyMode)
 export const updateSettingsSchema = z.object({
   darkMode: z.boolean().optional(),
+  pushNotifs: z.boolean().optional(),
+  emailNotifs: z.boolean().optional(),
+  privacyMode: z.enum(["public", "verified_only", "private"]).optional(),
   notifications: z
     .object({
       email: z.boolean().optional(),

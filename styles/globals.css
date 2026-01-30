@@ -115,6 +115,53 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Pinterest-style masonry: multi-column layout, cards don't split */
+.pinterest-masonry {
+  column-count: 2;
+  column-gap: 1rem;
+}
+@media (min-width: 768px) {
+  .pinterest-masonry {
+    column-count: 3;
+  }
+}
+.pinterest-masonry > * {
+  break-inside: avoid;
+  margin-bottom: 1rem;
+}
+
+/* Castings: Pinterest-style masonry – 2 cols mobile, image-dominant pins, dark feed */
+.pinterest-masonry-castings {
+  column-count: 2;
+  column-gap: 0.625rem;
+}
+@media (min-width: 640px) {
+  .pinterest-masonry-castings {
+    column-count: 3;
+    column-gap: 0.75rem;
+  }
+}
+@media (min-width: 1024px) {
+  .pinterest-masonry-castings {
+    column-count: 4;
+    column-gap: 1rem;
+  }
+}
+.pinterest-masonry-castings > * {
+  break-inside: avoid;
+  margin-bottom: 0.625rem;
+}
+@media (min-width: 640px) {
+  .pinterest-masonry-castings > * {
+    margin-bottom: 0.75rem;
+  }
+}
+@media (min-width: 1024px) {
+  .pinterest-masonry-castings > * {
+    margin-bottom: 1rem;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

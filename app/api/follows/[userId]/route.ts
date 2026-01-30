@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
-import { v4 as uuidv4 } from "uuid"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
@@ -16,18 +15,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Cannot follow yourself" }, { status: 400 })
     }
 
-    const target = await db`
-      SELECT id FROM users WHERE id = ${followingId}
-    `
-    if (target.length === 0) {
+    const target = await prisma.user.findUnique({
+      where: { id: followingId },
+    })
+    if (!target) {
       return NextResponse.json({ error: "Target user not found" }, { status: 404 })
     }
 
-    await db`
-      INSERT INTO follows (id, follower_id, following_id)
-      VALUES (${uuidv4()}, ${user.id}, ${followingId})
-      ON CONFLICT (follower_id, following_id) DO NOTHING
-    `
+    await prisma.follow.upsert({
+      where: {
+        followerId_followingId: { followerId: user.id, followingId },
+      },
+      create: { followerId: user.id, followingId },
+      update: {},
+    })
 
     return NextResponse.json({ ok: true })
   } catch (error) {
@@ -45,9 +46,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    await db`
-      DELETE FROM follows WHERE follower_id = ${user.id} AND following_id = ${followingId}
-    `
+    await prisma.follow.deleteMany({
+      where: { followerId: user.id, followingId },
+    })
 
     return NextResponse.json({ ok: true })
   } catch (error) {

@@ -43,13 +43,17 @@ export function OnboardingFlow({ onComplete }: { onComplete: () => void }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
+  const [authError, setAuthError] = useState("")
   const { login, signup, isLoading } = useAuth()
 
   const handleAuth = async () => {
+    setAuthError("")
     if (isLogin) {
-      const success = await login(email, password)
-      if (success) {
+      const result = await login(email, password)
+      if (result.success) {
         onComplete()
+      } else {
+        setAuthError(result.error ?? "Invalid credentials")
       }
     } else {
       if (!selectedRole) return
@@ -63,6 +67,8 @@ export function OnboardingFlow({ onComplete }: { onComplete: () => void }) {
       if (success) {
         setStep("complete")
         setTimeout(onComplete, 1500)
+      } else {
+        setAuthError("Signup failed")
       }
     }
   }
@@ -222,6 +228,11 @@ export function OnboardingFlow({ onComplete }: { onComplete: () => void }) {
                   className="h-12"
                 />
               </div>
+              {authError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {authError}
+                </p>
+              )}
             </div>
             <div className="space-y-4 mt-6">
               <Button

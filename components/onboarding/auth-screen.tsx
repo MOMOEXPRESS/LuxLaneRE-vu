@@ -47,11 +47,11 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
       return
     }
 
-    const success = await login(formData.email, formData.password)
-    if (success) {
+    const result = await login(formData.email, formData.password)
+    if (result.success) {
       onSuccess()
     } else {
-      setError("Invalid credentials")
+      setError(result.error ?? "Invalid credentials")
     }
   }
 

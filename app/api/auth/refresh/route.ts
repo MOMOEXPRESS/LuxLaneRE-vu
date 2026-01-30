@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import {
   verifyRefreshToken,
   revokeRefreshToken,
@@ -11,56 +10,50 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
+    const cookieStore = await request.cookies
     const refreshTokenCookie = cookieStore.get("refresh_token")?.value
 
     if (!refreshTokenCookie) {
       return NextResponse.json({ error: "No refresh token" }, { status: 401 })
     }
 
-    // Verify refresh token
     const userId = await verifyRefreshToken(refreshTokenCookie)
     if (!userId) {
       return NextResponse.json({ error: "Invalid or expired refresh token" }, { status: 401 })
     }
 
-    // Get user data
-    const result = await db`
-      SELECT id, email, role, username, display_name, avatar_url, is_verified, onboarding_complete
-      FROM users WHERE id = ${userId}
-    `
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true },
+    })
 
-    if (result.length === 0) {
+    if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const user = result[0]
-
-    // Revoke old refresh token (rotation)
     await revokeRefreshToken(refreshTokenCookie)
 
-    // Generate new tokens
     const accessToken = await generateAccessToken({
       userId: user.id,
       email: user.email,
-      role: user.role,
+      role: user.role.toLowerCase() as "model" | "agency" | "brand" | "client",
     })
     const newRefreshToken = await generateRefreshToken(user.id)
 
-    // Set new cookies
     await setAuthCookies(accessToken, newRefreshToken)
 
+    const profile = user.profile
     return NextResponse.json({
       success: true,
       user: {
         id: user.id,
         email: user.email,
-        role: user.role,
+        role: user.role.toLowerCase(),
         username: user.username,
-        displayName: user.display_name,
-        avatarUrl: user.avatar_url,
-        isVerified: user.is_verified,
-        onboardingComplete: user.onboarding_complete,
+        displayName: profile?.displayName ?? user.username,
+        avatarUrl: profile?.avatarUrl ?? null,
+        isVerified: profile ? profile.verificationStatus !== "UNVERIFIED" : false,
+        onboardingComplete: !!profile,
       },
     })
   } catch (error) {

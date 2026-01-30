@@ -1,14 +1,17 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api-client"
 import { useStore } from "@/lib/store-context"
 import type { User, Casting } from "@/lib/types"
 import {
@@ -34,9 +37,10 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Plus,
 } from "lucide-react"
 
-type ProfileTab = "portfolio" | "details" | "availability"
+type ProfileTab = "portfolio" | "posts" | "details" | "availability"
 
 interface ProfileViewProps {
   user?: User
@@ -44,6 +48,8 @@ interface ProfileViewProps {
   onSettingsClick?: () => void
   onMessageClick?: () => void
   onInviteToCasting?: (casting: Casting) => void
+  onProfileUpdated?: () => void
+  onFollowToggle?: () => void
 }
 
 export function ProfileView({
@@ -52,6 +58,8 @@ export function ProfileView({
   onSettingsClick,
   onMessageClick,
   onInviteToCasting,
+  onProfileUpdated,
+  onFollowToggle,
 }: ProfileViewProps) {
   const { user: currentUser } = useAuth()
   const { castings } = useStore()
@@ -60,9 +68,16 @@ export function ProfileView({
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [showInviteSheet, setShowInviteSheet] = useState(false)
+  const [showEditDetailsSheet, setShowEditDetailsSheet] = useState(false)
   const [twinRotation, setTwinRotation] = useState(0)
   const [twinZoom, setTwinZoom] = useState(1)
   const [twinTab, setTwinTab] = useState<"head" | "body" | "measurements">("head")
+  const [detailsSaving, setDetailsSaving] = useState(false)
+  const [detailsError, setDetailsError] = useState<string | null>(null)
+  const [showAddPortfolioSheet, setShowAddPortfolioSheet] = useState(false)
+  const [addPortfolioUrl, setAddPortfolioUrl] = useState("")
+  const [addPortfolioSaving, setAddPortfolioSaving] = useState(false)
+  const [addPortfolioError, setAddPortfolioError] = useState<string | null>(null)
 
   const user = profileUser || currentUser
   const isBrandOrAgency = currentUser?.role === "brand" || currentUser?.role === "agency"
@@ -72,8 +87,10 @@ export function ProfileView({
   // Get user's castings for invite
   const myCastings = castings.filter((c) => c.creatorId === currentUser?.id && c.status === "active")
 
+  const hasPosts = (user.posts?.length ?? 0) > 0
   const tabs: { id: ProfileTab; label: string; icon: React.ReactNode }[] = [
     { id: "portfolio", label: "Portfolio", icon: <Grid3X3 className="w-4 h-4" /> },
+    ...(hasPosts ? [{ id: "posts" as const, label: "Posts", icon: <Grid3X3 className="w-4 h-4" /> }] : []),
     { id: "details", label: "Details", icon: <Briefcase className="w-4 h-4" /> },
     { id: "availability", label: "Availability", icon: <Calendar className="w-4 h-4" /> },
   ]
@@ -205,9 +222,13 @@ export function ProfileView({
         {/* Actions */}
         {!isOwn && (
           <div className="flex gap-2 mt-4">
-            <Button className="flex-1" variant="default">
+            <Button
+              className="flex-1"
+              variant={user.isFollowing ? "outline" : "default"}
+              onClick={onFollowToggle}
+            >
               <UserPlus className="w-4 h-4 mr-2" />
-              Follow
+              {user.isFollowing ? "Following" : "Follow"}
             </Button>
             <Button variant="outline" className="flex-1 bg-transparent" onClick={onMessageClick}>
               <MessageSquare className="w-4 h-4 mr-2" />
@@ -435,6 +456,17 @@ export function ProfileView({
 
                 {/* Portfolio Grid */}
                 <div className="grid grid-cols-3 gap-0.5 p-0.5">
+                  {isOwn && user.role === "model" && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="aspect-[3/4] bg-muted border-2 border-dashed border-muted-foreground/30 rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:bg-muted/80 hover:border-muted-foreground/50 transition-colors"
+                      onClick={() => setShowAddPortfolioSheet(true)}
+                    >
+                      <Plus className="w-8 h-8" />
+                      <span className="text-xs font-medium">Add photo</span>
+                    </motion.button>
+                  )}
                   {allImages.map((img, i) => (
                     <motion.button
                       key={i}
@@ -454,9 +486,25 @@ export function ProfileView({
                       />
                     </motion.button>
                   ))}
-                  {allImages.length === 0 && (
+                  {allImages.length === 0 && !(isOwn && user.role === "model") && (
                     <div className="col-span-3 py-12 text-center text-muted-foreground">No portfolio images yet</div>
                   )}
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === "posts" && user.posts && user.posts.length > 0 && (
+              <motion.div key="posts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-4">
+                <div className="grid grid-cols-3 gap-1">
+                  {user.posts.map((post) => (
+                    <div key={post.id} className="aspect-square bg-muted rounded-lg overflow-hidden">
+                      <img
+                        src={post.imageUrl || "/placeholder.svg"}
+                        alt={post.caption ?? "Post"}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))}
                 </div>
               </motion.div>
             )}
@@ -469,6 +517,14 @@ export function ProfileView({
                 exit={{ opacity: 0 }}
                 className="p-4 space-y-4"
               >
+                {isOwn && user.role === "model" && (
+                  <div className="flex justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setShowEditDetailsSheet(true)}>
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit details
+                    </Button>
+                  </div>
+                )}
                 {/* Measurements Card */}
                 {user.measurements && (
                   <Card className="p-4">
@@ -590,22 +646,30 @@ export function ProfileView({
                           ? "bg-emerald-500/10 text-emerald-600"
                           : user.availabilityStatus === "hold"
                             ? "bg-amber-500/10 text-amber-600"
-                            : "bg-red-500/10 text-red-600"
+                            : user.availabilityStatus === "booked"
+                              ? "bg-red-500/10 text-red-600"
+                              : "bg-muted text-muted-foreground"
                       }
                     >
                       {user.availabilityStatus === "available"
                         ? "Available"
                         : user.availabilityStatus === "hold"
                           ? "On Hold"
-                          : "Booked"}
+                          : user.availabilityStatus === "booked"
+                            ? "Booked"
+                            : "—"}
                     </Badge>
                   </div>
-                  {isOwn && (
+                  {isOwn && user.role === "model" && (
                     <div className="flex gap-2">
                       <Button
                         variant={user.availabilityStatus === "available" ? "default" : "outline"}
                         size="sm"
                         className="flex-1"
+                        onClick={async () => {
+                          const res = await api.updateModelProfile({ availability: "AVAILABLE" })
+                          if (!res.error) onProfileUpdated?.()
+                        }}
                       >
                         Available
                       </Button>
@@ -613,6 +677,10 @@ export function ProfileView({
                         variant={user.availabilityStatus === "hold" ? "default" : "outline"}
                         size="sm"
                         className="flex-1"
+                        onClick={async () => {
+                          const res = await api.updateModelProfile({ availability: "HOLD" })
+                          if (!res.error) onProfileUpdated?.()
+                        }}
                       >
                         On Hold
                       </Button>
@@ -620,6 +688,10 @@ export function ProfileView({
                         variant={user.availabilityStatus === "booked" ? "default" : "outline"}
                         size="sm"
                         className="flex-1"
+                        onClick={async () => {
+                          const res = await api.updateModelProfile({ availability: "BOOKED" })
+                          if (!res.error) onProfileUpdated?.()
+                        }}
                       >
                         Booked
                       </Button>
@@ -755,6 +827,316 @@ export function ProfileView({
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Add Portfolio Photo Sheet */}
+      <Sheet open={showAddPortfolioSheet} onOpenChange={setShowAddPortfolioSheet}>
+        <SheetContent side="bottom" className="h-auto max-h-[70vh] rounded-t-2xl">
+          <SheetHeader>
+            <SheetTitle>Add portfolio photo</SheetTitle>
+          </SheetHeader>
+          <form
+            className="mt-4 space-y-4"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const url = addPortfolioUrl.trim()
+              if (!url) return
+              setAddPortfolioError(null)
+              setAddPortfolioSaving(true)
+              const res = await api.addPortfolioImage(url)
+              setAddPortfolioSaving(false)
+              if (res.error) {
+                setAddPortfolioError(res.error)
+                return
+              }
+              setAddPortfolioUrl("")
+              setShowAddPortfolioSheet(false)
+              onProfileUpdated?.()
+            }}
+          >
+            {addPortfolioError && (
+              <p className="text-sm text-destructive bg-destructive/10 p-2 rounded">{addPortfolioError}</p>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="portfolioUrl">Image URL</Label>
+              <Input
+                id="portfolioUrl"
+                type="url"
+                placeholder="https://example.com/photo.jpg"
+                value={addPortfolioUrl}
+                onChange={(e) => setAddPortfolioUrl(e.target.value)}
+                required
+              />
+              <p className="text-xs text-muted-foreground">Paste a public image URL to add it to your portfolio.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={addPortfolioSaving || !addPortfolioUrl.trim()}>
+                {addPortfolioSaving ? "Adding…" : "Add photo"}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setShowAddPortfolioSheet(false)}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
+
+      {/* Edit Details Sheet */}
+      <EditDetailsSheet
+        user={user}
+        open={showEditDetailsSheet}
+        onOpenChange={setShowEditDetailsSheet}
+        saving={detailsSaving}
+        setSaving={setDetailsSaving}
+        error={detailsError}
+        setError={setDetailsError}
+        onSuccess={() => {
+          setShowEditDetailsSheet(false)
+          onProfileUpdated?.()
+        }}
+      />
     </div>
+  )
+}
+
+function EditDetailsSheet({
+  user,
+  open,
+  onOpenChange,
+  saving,
+  setSaving,
+  error,
+  setError,
+  onSuccess,
+}: {
+  user: User
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  saving: boolean
+  setSaving: (v: boolean) => void
+  error: string | null
+  setError: (v: string | null) => void
+  onSuccess: () => void
+}) {
+  const parseNum = (s: string | undefined): number | undefined => {
+    if (s == null || s === "") return undefined
+    const n = parseInt(s, 10)
+    return Number.isNaN(n) ? undefined : n
+  }
+  const [heightCm, setHeightCm] = useState("")
+  const [bustCm, setBustCm] = useState("")
+  const [waistCm, setWaistCm] = useState("")
+  const [hipsCm, setHipsCm] = useState("")
+  const [shoeSize, setShoeSize] = useState("")
+  const [dressSize, setDressSize] = useState("")
+  const [hair, setHair] = useState("")
+  const [eyes, setEyes] = useState("")
+  const [skinTone, setSkinTone] = useState("")
+  const [languagesStr, setLanguagesStr] = useState("")
+  const [experienceStr, setExperienceStr] = useState("")
+
+  useEffect(() => {
+    if (!open) return
+    setHeightCm(user.measurements?.heightCm != null ? String(user.measurements.heightCm) : "")
+    setBustCm(
+      user.measurements?.bust != null && user.measurements.bust !== ""
+        ? String(user.measurements.bust.replace(/\s*cm\s*/i, ""))
+        : "",
+    )
+    setWaistCm(
+      user.measurements?.waist != null && user.measurements.waist !== ""
+        ? String(user.measurements.waist.replace(/\s*cm\s*/i, ""))
+        : "",
+    )
+    setHipsCm(
+      user.measurements?.hips != null && user.measurements.hips !== ""
+        ? String(user.measurements.hips.replace(/\s*cm\s*/i, ""))
+        : "",
+    )
+    setShoeSize(user.measurements?.shoeSize ?? "")
+    setDressSize(user.measurements?.dressSize ?? "")
+    setHair(user.measurements?.hairColor ?? "")
+    setEyes(user.measurements?.eyeColor ?? "")
+    setSkinTone(user.skinTone ?? "")
+    setLanguagesStr(Array.isArray(user.languages) ? user.languages.join(", ") : "")
+    setExperienceStr(Array.isArray(user.experience) ? user.experience.join(", ") : "")
+  }, [open, user])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setSaving(true)
+    const h = parseNum(heightCm)
+    const b = parseNum(bustCm)
+    const w = parseNum(waistCm)
+    const hi = parseNum(hipsCm)
+    const langs = languagesStr
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const exp = experienceStr
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const res = await api.updateModelProfile({
+      ...(h != null && { heightCm: h }),
+      ...(b != null && { bustCm: b }),
+      ...(w != null && { waistCm: w }),
+      ...(hi != null && { hipsCm: hi }),
+      ...(shoeSize.trim() && { shoeSize: shoeSize.trim() }),
+      ...(hair.trim() && { hair: hair.trim() }),
+      ...(eyes.trim() && { eyes: eyes.trim() }),
+      ...(langs.length > 0 && { languages: langs }),
+      details: {
+        ...(dressSize.trim() && { dressSize: dressSize.trim() }),
+        ...(skinTone.trim() && { skinTone: skinTone.trim() }),
+        ...(exp.length > 0 && { experience: exp }),
+      },
+    })
+    setSaving(false)
+    if (res.error) {
+      setError(
+        res.error.toLowerCase().includes("not authenticated") || res.error.toLowerCase().includes("authenticated")
+          ? "Your session may have expired. Please log in again."
+          : res.error,
+      )
+      return
+    }
+    onSuccess()
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="h-[85vh] overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Edit details</SheetTitle>
+        </SheetHeader>
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          {error && (
+            <p className="text-sm text-destructive bg-destructive/10 p-2 rounded">{error}</p>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="heightCm">Height (cm)</Label>
+              <Input
+                id="heightCm"
+                type="number"
+                min={120}
+                max={220}
+                value={heightCm}
+                onChange={(e) => setHeightCm(e.target.value)}
+                placeholder="175"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bustCm">Bust (cm)</Label>
+              <Input
+                id="bustCm"
+                type="number"
+                min={50}
+                max={200}
+                value={bustCm}
+                onChange={(e) => setBustCm(e.target.value)}
+                placeholder="86"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="waistCm">Waist (cm)</Label>
+              <Input
+                id="waistCm"
+                type="number"
+                min={40}
+                max={150}
+                value={waistCm}
+                onChange={(e) => setWaistCm(e.target.value)}
+                placeholder="64"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="hipsCm">Hips (cm)</Label>
+              <Input
+                id="hipsCm"
+                type="number"
+                min={50}
+                max={200}
+                value={hipsCm}
+                onChange={(e) => setHipsCm(e.target.value)}
+                placeholder="90"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="shoeSize">Shoe size</Label>
+              <Input
+                id="shoeSize"
+                value={shoeSize}
+                onChange={(e) => setShoeSize(e.target.value)}
+                placeholder="EU 39"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dressSize">Dress size</Label>
+              <Input
+                id="dressSize"
+                value={dressSize}
+                onChange={(e) => setDressSize(e.target.value)}
+                placeholder="S / 36"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="hair">Hair</Label>
+              <Input
+                id="hair"
+                value={hair}
+                onChange={(e) => setHair(e.target.value)}
+                placeholder="Brown"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="eyes">Eyes</Label>
+              <Input
+                id="eyes"
+                value={eyes}
+                onChange={(e) => setEyes(e.target.value)}
+                placeholder="Brown"
+              />
+            </div>
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="skinTone">Skin tone</Label>
+              <Input
+                id="skinTone"
+                value={skinTone}
+                onChange={(e) => setSkinTone(e.target.value)}
+                placeholder="Light / Medium"
+              />
+            </div>
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="languages">Languages (comma-separated)</Label>
+              <Input
+                id="languages"
+                value={languagesStr}
+                onChange={(e) => setLanguagesStr(e.target.value)}
+                placeholder="English, French, Italian"
+              />
+            </div>
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="experience">Experience (comma-separated)</Label>
+              <Input
+                id="experience"
+                value={experienceStr}
+                onChange={(e) => setExperienceStr(e.target.value)}
+                placeholder="Runway, Editorial, Campaign"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-4">
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
   )
 }

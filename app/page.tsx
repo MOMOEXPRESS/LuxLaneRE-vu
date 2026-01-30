@@ -1,7 +1,11 @@
 "use client"
 
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api-client"
 import { useNavigation } from "@/lib/navigation-context"
+import type { User } from "@/lib/types"
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow"
 import { BottomNav } from "@/components/layout/bottom-nav"
 import { Header } from "@/components/layout/header"
@@ -22,8 +26,14 @@ import { CastingRoomView } from "@/components/casting-room/casting-room"
 import { BrandDashboard } from "@/components/brand/brand-dashboard"
 import { mockConversations, getRoomByCastingId } from "@/lib/mock-data"
 
+function useViewProfile() {
+  const router = useRouter()
+  return (u: User) => router.push(`/u/${u.username}`)
+}
+
 export default function Home() {
   const { isAuthenticated, user } = useAuth()
+  const viewProfile = useViewProfile()
   const {
     currentView,
     activeTab,
@@ -35,6 +45,12 @@ export default function Home() {
     setActiveTab,
     goBack,
   } = useNavigation()
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("tab") === "inbox") setActiveTab("inbox")
+  }, [setActiveTab])
 
   const unreadCount = mockConversations.reduce((acc, c) => acc + c.unreadCount, 0)
   const isBrandOrAgency = user?.role === "brand" || user?.role === "agency"
@@ -55,7 +71,7 @@ export default function Home() {
 
   // Scoreboard view - full screen with back
   if (currentView === "scoreboard") {
-    return <ScoreboardView onBack={goBack} onViewProfile={(u) => navigateTo("profile", { profile: u })} />
+    return <ScoreboardView onBack={goBack} onViewProfile={viewProfile} />
   }
 
   // Compare view - full screen with back
@@ -65,7 +81,7 @@ export default function Home() {
         models={compareModels}
         casting={selectedCasting || undefined}
         onBack={goBack}
-        onViewProfile={(u) => navigateTo("profile", { profile: u })}
+        onViewProfile={viewProfile}
       />
     )
   }
@@ -76,7 +92,7 @@ export default function Home() {
       <CastingRoomView
         room={selectedRoom}
         onBack={goBack}
-        onViewProfile={(u) => navigateTo("profile", { profile: u })}
+        onViewProfile={viewProfile}
       />
     )
   }
@@ -125,7 +141,8 @@ export default function Home() {
         <CastingDetail
           casting={selectedCasting}
           onBack={goBack}
-          onViewProfile={(u) => navigateTo("profile", { profile: u })}
+          onViewProfile={viewProfile}
+          onViewCasting={(c) => navigateTo("casting", { casting: c })}
           onOpenRoom={room ? () => navigateTo("casting-room", { room, casting: selectedCasting }) : undefined}
         />
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />
@@ -144,7 +161,28 @@ export default function Home() {
           showBack={true}
           onAvatarClick={() => navigateTo("own-profile")}
         />
-        <ProfileView user={selectedProfile} isOwn={false} onMessageClick={() => setActiveTab("inbox")} />
+        <ProfileView
+          user={selectedProfile}
+          isOwn={false}
+          onMessageClick={async () => {
+            const res = await api.startDirectConversation(selectedProfile.id)
+            setActiveTab("inbox")
+          }}
+          onFollowToggle={async () => {
+            if (selectedProfile.isFollowing) {
+              await api.unfollow(selectedProfile.id)
+            } else {
+              await api.follow(selectedProfile.id)
+            }
+            navigateTo("profile", {
+              profile: {
+                ...selectedProfile,
+                isFollowing: !selectedProfile.isFollowing,
+                followers: selectedProfile.followers + (selectedProfile.isFollowing ? -1 : 1),
+              },
+            })
+          }}
+        />
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />
       </div>
     )
@@ -175,7 +213,7 @@ export default function Home() {
         return (
           <HomeView
             onViewCasting={(casting) => navigateTo("casting", { casting })}
-            onViewProfile={(u) => navigateTo("profile", { profile: u })}
+            onViewProfile={viewProfile}
             onViewCastingsHub={() => setActiveTab("castings")}
             onViewScoreboard={() => navigateTo("scoreboard")}
           />
@@ -185,7 +223,7 @@ export default function Home() {
           return (
             <BrandDashboard
               onViewCasting={(casting) => navigateTo("casting", { casting })}
-              onViewProfile={(u) => navigateTo("profile", { profile: u })}
+              onViewProfile={viewProfile}
             />
           )
         }
@@ -193,21 +231,21 @@ export default function Home() {
       case "discover":
         return (
           <DiscoverView
-            onViewProfile={(u) => navigateTo("profile", { profile: u })}
+            onViewProfile={viewProfile}
             onViewCasting={(casting) => navigateTo("casting", { casting })}
           />
         )
       case "models":
         return (
           <ModelsBrowse
-            onViewProfile={(u) => navigateTo("profile", { profile: u })}
+            onViewProfile={viewProfile}
             onCompare={(models) => navigateTo("compare", { models })}
           />
         )
       case "roster":
-        return <RosterView onViewProfile={(u) => navigateTo("profile", { profile: u })} />
+        return <RosterView onViewProfile={viewProfile} />
       case "inbox":
-        return <InboxView />
+        return <InboxView onViewProfile={viewProfile} />
       default:
         return null
     }
@@ -218,7 +256,7 @@ export default function Home() {
     return (
       <BrandDashboard
         onViewCasting={(casting) => navigateTo("casting", { casting })}
-        onViewProfile={(u) => navigateTo("profile", { profile: u })}
+        onViewProfile={viewProfile}
         onBack={goBack}
         bottomNav={<BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />}
       />

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
@@ -9,49 +9,52 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Get all conversations where user is a member
-    const conversations = await db`
-      SELECT c.*, cm.last_read_at
-      FROM conversations c
-      JOIN conversation_members cm ON c.id = cm.conversation_id
-      WHERE cm.user_id = ${user.id}
-      ORDER BY c.last_message_at DESC NULLS LAST
-    `
+    const memberships = await prisma.conversationMember.findMany({
+      where: { userId: user.id },
+      include: { conversation: true },
+      orderBy: { joinedAt: "desc" },
+    })
 
-    // For each conversation, get the other participant(s) and last message
     const enrichedConversations = await Promise.all(
-      conversations.map(async (conv: Record<string, unknown>) => {
-        // Get other members
-        const members = await db`
-          SELECT u.id, u.display_name, u.avatar_url, u.username
-          FROM conversation_members cm
-          JOIN users u ON cm.user_id = u.id
-          WHERE cm.conversation_id = ${conv.id} AND cm.user_id != ${user.id}
-        `
+      memberships.map(async (mem) => {
+        const conv = mem.conversation
+        const otherMemberIds = await prisma.conversationMember.findMany({
+          where: { conversationId: conv.id, userId: { not: user.id } },
+          select: { userId: true },
+        })
+        const otherUsers = await prisma.user.findMany({
+          where: { id: { in: otherMemberIds.map((m) => m.userId) } },
+          include: { profile: true },
+        })
+        const lastMessage = await prisma.message.findFirst({
+          where: { conversationId: conv.id },
+          orderBy: { createdAt: "desc" },
+          include: { sender: { include: { profile: true } } },
+        })
 
-        // Get last message
-        const lastMessage = await db`
-          SELECT m.*, u.display_name as sender_name
-          FROM messages m
-          JOIN users u ON m.sender_id = u.id
-          WHERE m.conversation_id = ${conv.id}
-          ORDER BY m.created_at DESC
-          LIMIT 1
-        `
-
-        // Get unread count
-        const unreadCount = await db`
-          SELECT COUNT(*) as count FROM messages 
-          WHERE conversation_id = ${conv.id} 
-            AND sender_id != ${user.id}
-            AND created_at > COALESCE(${conv.last_read_at}, '1970-01-01')
-        `
+        const members = otherUsers.map((u) => ({
+          id: u.id,
+          displayName: u.profile?.displayName ?? u.username,
+          avatarUrl: u.profile?.avatarUrl ?? null,
+          username: u.username,
+        }))
 
         return {
-          ...conv,
+          id: conv.id,
+          type: conv.type,
+          castingId: conv.castingId,
+          createdAt: conv.createdAt.toISOString(),
           members,
-          lastMessage: lastMessage[0] || null,
-          unreadCount: Number(unreadCount[0]?.count || 0),
+          lastMessage: lastMessage
+            ? {
+                id: lastMessage.id,
+                content: lastMessage.body,
+                senderId: lastMessage.senderId,
+                senderName: lastMessage.sender.profile?.displayName ?? lastMessage.sender.username,
+                createdAt: lastMessage.createdAt.toISOString(),
+              }
+            : null,
+          unreadCount: 0,
         }
       }),
     )

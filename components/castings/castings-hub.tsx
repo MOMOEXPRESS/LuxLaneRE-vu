@@ -2,16 +2,13 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/lib/auth-context"
 import { useStore } from "@/lib/store-context"
 import type { Casting } from "@/lib/types"
-import { Search, MapPin, BadgeCheck, Plus, ChevronRight, Clock } from "lucide-react"
-import { formatDistanceToNow } from "date-fns"
+import { Search, Plus } from "lucide-react"
 
 type CastingTab = "active" | "foryou" | "invited" | "applied" | "shortlisted" | "booked"
 
@@ -118,132 +115,113 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
   }
 
   return (
-    <div className="pb-20">
-      {/* Search */}
-      <div className="px-4 py-3 border-b border-border sticky top-14 bg-background z-30">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search castings..."
-              className="pl-9 h-10"
-            />
+    <div className="pb-20 min-h-screen bg-zinc-950">
+      {/* Header: filter chips + search/add – Pinterest-style */}
+      <div className="sticky top-14 z-30 bg-zinc-950/95 backdrop-blur-sm border-b border-zinc-800">
+        <div className="px-4 py-2 flex items-center gap-2">
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar flex-1 min-w-0">
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  activeTab === tab
+                    ? "bg-white text-zinc-950"
+                    : "bg-zinc-800/80 text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                {getTabLabel(tab)}
+                {tab === "applied" && !isCreator && userApplications.length > 0 && (
+                  <span className="ml-1 opacity-80">{userApplications.length}</span>
+                )}
+              </button>
+            ))}
           </div>
-          {isCreator && onCreateCasting && (
-            <Button onClick={onCreateCasting} size="icon" className="h-10 w-10 shrink-0">
-              <Plus className="w-4 h-4" />
-            </Button>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            <div className="relative w-9 h-9 flex items-center justify-center rounded-full bg-zinc-800/80 text-zinc-400">
+              <Search className="w-4 h-4" />
+            </div>
+            {isCreator && onCreateCasting && (
+              <Button
+                onClick={onCreateCasting}
+                size="icon"
+                className="h-9 w-9 shrink-0 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-0"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="px-4 pb-2">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search castings..."
+            className="h-9 rounded-full bg-zinc-800/80 border-zinc-700 text-zinc-200 placeholder:text-zinc-500 pl-4 text-sm"
+          />
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="px-4 py-2 flex gap-2 overflow-x-auto no-scrollbar border-b border-border">
-        {tabs.map((tab) => (
-          <Button
-            key={tab}
-            variant={activeTab === tab ? "default" : "outline"}
-            size="sm"
-            onClick={() => setActiveTab(tab)}
-            className="shrink-0 h-8"
-          >
-            {getTabLabel(tab)}
-            {tab === "applied" && !isCreator && userApplications.length > 0 && (
-              <span className="ml-1.5 text-xs opacity-70">{userApplications.length}</span>
-            )}
-          </Button>
-        ))}
-      </div>
-
-      {/* Content */}
+      {/* Feed – masonry grid, image-dominant pins */}
       <AnimatePresence mode="wait">
         <motion.div
           key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="px-3 py-4"
         >
           {filteredCastings.length > 0 ? (
-            <div className="space-y-3">
+            <div className="pinterest-masonry-castings">
               {filteredCastings.map((casting, index) => {
                 const appStatus = getApplicationStatus(casting.id)
                 return (
                   <motion.div
                     key={casting.id}
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.03 }}
+                    transition={{ delay: Math.min(index * 0.03, 0.25) }}
                   >
                     <Card
-                      className="overflow-hidden cursor-pointer hover:bg-muted/30 transition-colors"
+                      className="overflow-hidden cursor-pointer rounded-2xl border-0 bg-zinc-900 shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
                       onClick={() => onViewCasting(casting)}
                     >
-                      <div className="flex">
-                        {/* Image */}
-                        {casting.images?.[0] && (
-                          <div className="w-24 h-24 shrink-0 bg-muted">
-                            <img
-                              src={casting.images[0] || "/placeholder.svg"}
-                              alt={casting.title}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        )}
-                        {/* Content */}
-                        <div className="flex-1 p-3 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <Badge variant="secondary" className="text-[10px] h-5">
-                                {typeLabels[casting.type]}
-                              </Badge>
-                              {appStatus && (
-                                <Badge
-                                  variant="outline"
-                                  className={`text-[10px] h-5 ${
-                                    appStatus === "shortlisted"
-                                      ? "bg-warning/10 text-warning border-warning/20"
-                                      : appStatus === "accepted"
-                                        ? "bg-success/10 text-success border-success/20"
-                                        : ""
-                                  }`}
-                                >
-                                  {appStatus}
-                                </Badge>
-                              )}
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                          </div>
-                          <h3 className="font-medium text-sm mt-1 truncate">{casting.title}</h3>
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <Avatar className="w-4 h-4">
-                              <AvatarImage
-                                src={casting.creator.avatar || "/placeholder.svg"}
-                                alt={casting.creator.name}
-                              />
-                              <AvatarFallback className="text-[8px]">{casting.creator.name[0]}</AvatarFallback>
-                            </Avatar>
-                            <span className="text-xs text-muted-foreground truncate">{casting.creator.name}</span>
-                            {casting.creator.verified && <BadgeCheck className="w-3 h-3 text-foreground shrink-0" />}
-                          </div>
-                          <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {casting.location.split(",")[0]}
+                      {/* Pin: image dominant */}
+                      <div className="relative aspect-[3/4] bg-zinc-800 min-h-0">
+                        <img
+                          src={casting.images?.[0] || "/placeholder.svg"}
+                          alt={casting.title}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1">
+                          <span className="rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+                            {typeLabels[casting.type]}
+                          </span>
+                          {appStatus && (
+                            <span
+                              className={`rounded-md px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm ${
+                                appStatus === "shortlisted"
+                                  ? "bg-amber-500/90 text-black"
+                                  : appStatus === "accepted"
+                                    ? "bg-emerald-500/90 text-black"
+                                    : "bg-white/20 text-white"
+                              }`}
+                            >
+                              {appStatus}
                             </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {formatDistanceToNow(casting.deadline, { addSuffix: false })}
-                            </span>
-                            <span className="font-medium text-foreground">
-                              {casting.pay.type === "tbd"
-                                ? "TBD"
-                                : `${casting.pay.currency} ${casting.pay.amount.toLocaleString()}`}
-                            </span>
-                          </div>
+                          )}
                         </div>
+                      </div>
+                      {/* Minimal caption: title + source */}
+                      <div className="p-2.5">
+                        <h3 className="font-medium text-xs text-zinc-100 line-clamp-2 leading-snug">
+                          {casting.title}
+                        </h3>
+                        <p className="mt-1 text-[11px] text-zinc-500 truncate">
+                          {casting.creator.name}
+                          {casting.location ? ` · ${casting.location.split(",")[0]}` : ""}
+                        </p>
                       </div>
                     </Card>
                   </motion.div>
@@ -251,9 +229,11 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
               })}
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-16 text-zinc-500">
               <p>No castings found</p>
-              {activeTab === "invited" && <p className="text-sm mt-1">You haven't been invited to any castings yet</p>}
+              {activeTab === "invited" && (
+                <p className="text-sm mt-1 text-zinc-600">You haven&apos;t been invited to any castings yet</p>
+              )}
             </div>
           )}
         </motion.div>

@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
-import { v4 as uuidv4 } from "uuid"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -12,47 +11,48 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Verify user is a member
-    const membership = await db`
-      SELECT id FROM conversation_members WHERE conversation_id = ${conversationId} AND user_id = ${user.id}
-    `
+    const membership = await prisma.conversationMember.findUnique({
+      where: {
+        conversationId_userId: { conversationId, userId: user.id },
+      },
+    })
 
-    if (membership.length === 0) {
+    if (!membership) {
       return NextResponse.json({ error: "Not a member of this conversation" }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
-    const limit = Number(searchParams.get("limit")) || 50
-    const before = searchParams.get("before") // cursor for pagination
+    const limit = Math.min(Number(searchParams.get("limit")) || 50, 100)
+    const before = searchParams.get("before")
 
-    let messages
-    if (before) {
-      messages = await db`
-        SELECT m.*, u.display_name as sender_name, u.avatar_url as sender_avatar
-        FROM messages m
-        JOIN users u ON m.sender_id = u.id
-        WHERE m.conversation_id = ${conversationId} AND m.created_at < ${before}
-        ORDER BY m.created_at DESC
-        LIMIT ${limit}
-      `
-    } else {
-      messages = await db`
-        SELECT m.*, u.display_name as sender_name, u.avatar_url as sender_avatar
-        FROM messages m
-        JOIN users u ON m.sender_id = u.id
-        WHERE m.conversation_id = ${conversationId}
-        ORDER BY m.created_at DESC
-        LIMIT ${limit}
-      `
-    }
+    const orderBy = { createdAt: "desc" as const }
+    const where = { conversationId }
 
-    // Update last_read_at
-    await db`
-      UPDATE conversation_members SET last_read_at = NOW() 
-      WHERE conversation_id = ${conversationId} AND user_id = ${user.id}
-    `
+    const messages = before
+      ? await prisma.message.findMany({
+          where: { ...where, createdAt: { lt: new Date(before) } },
+          orderBy,
+          take: limit,
+          include: { sender: { include: { profile: true } } },
+        })
+      : await prisma.message.findMany({
+          where,
+          orderBy,
+          take: limit,
+          include: { sender: { include: { profile: true } } },
+        })
 
-    return NextResponse.json({ messages: messages.reverse() }) // Return in chronological order
+    const formatted = messages.reverse().map((m) => ({
+      id: m.id,
+      content: m.body,
+      senderId: m.senderId,
+      senderName: m.sender.profile?.displayName ?? m.sender.username,
+      senderAvatar: m.sender.profile?.avatarUrl ?? null,
+      attachmentUrl: m.attachmentUrl,
+      createdAt: m.createdAt.toISOString(),
+    }))
+
+    return NextResponse.json({ messages: formatted })
   } catch (error) {
     console.error("Get messages error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -68,65 +68,42 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Verify user is a member
-    const membership = await db`
-      SELECT id FROM conversation_members WHERE conversation_id = ${conversationId} AND user_id = ${user.id}
-    `
+    const membership = await prisma.conversationMember.findUnique({
+      where: {
+        conversationId_userId: { conversationId, userId: user.id },
+      },
+    })
 
-    if (membership.length === 0) {
+    if (!membership) {
       return NextResponse.json({ error: "Not a member of this conversation" }, { status: 403 })
     }
 
-    const body = await request.json()
-    const { content, attachments } = body
-
+    const raw = await request.json().catch(() => ({}))
+    const content = (raw.content ?? raw.body) as string | undefined
+    const attachmentUrl = (raw.attachmentUrl ?? raw.attachments?.[0]) as string | undefined
     if (!content?.trim()) {
       return NextResponse.json({ error: "Message content is required" }, { status: 400 })
     }
+    const body = content.trim()
 
-    // Create message
-    const messageId = uuidv4()
-    await db`
-      INSERT INTO messages (id, conversation_id, sender_id, content, attachments)
-      VALUES (${messageId}, ${conversationId}, ${user.id}, ${content}, ${attachments || []})
-    `
-
-    // Update conversation last_message_at
-    await db`
-      UPDATE conversations SET last_message_at = NOW() WHERE id = ${conversationId}
-    `
-
-    // Update sender's last_read_at
-    await db`
-      UPDATE conversation_members SET last_read_at = NOW() 
-      WHERE conversation_id = ${conversationId} AND user_id = ${user.id}
-    `
-
-    // Create notifications for other members
-    const otherMembers = await db`
-      SELECT user_id FROM conversation_members 
-      WHERE conversation_id = ${conversationId} AND user_id != ${user.id}
-    `
-
-    for (const member of otherMembers) {
-      await db`
-        INSERT INTO notifications (id, user_id, type, title, body, related_id, related_type)
-        VALUES (
-          ${uuidv4()}, ${member.user_id}, 'new_message',
-          'New Message', ${`${user.displayName}: ${content.substring(0, 50)}${content.length > 50 ? "..." : ""}`},
-          ${conversationId}, 'conversation'
-        )
-      `
-    }
+    const message = await prisma.message.create({
+      data: {
+        conversationId,
+        senderId: user.id,
+        body,
+        attachmentUrl: attachmentUrl ?? null,
+      },
+      include: { sender: { include: { profile: true } } },
+    })
 
     return NextResponse.json({
       success: true,
       message: {
-        id: messageId,
-        content,
-        senderId: user.id,
-        senderName: user.displayName,
-        createdAt: new Date().toISOString(),
+        id: message.id,
+        content: message.body,
+        senderId: message.senderId,
+        senderName: message.sender.profile?.displayName ?? message.sender.username,
+        createdAt: message.createdAt.toISOString(),
       },
     })
   } catch (error) {

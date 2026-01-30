@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
-import { mockConversations, mockMessages } from "@/lib/mock-data"
 import { useAuth } from "@/lib/auth-context"
+import { useConversations, useMessages } from "@/lib/hooks/use-conversations"
+import { api } from "@/lib/api-client"
+import type { User as UserType } from "@/lib/types"
 import { useStore } from "@/lib/store-context"
 import type { Conversation, Message, JobOffer, Notification } from "@/lib/types"
 import {
@@ -29,8 +31,64 @@ import { formatDistanceToNow, format, isToday, isYesterday } from "date-fns"
 
 type InboxTab = "messages" | "notifications"
 
-export function InboxView() {
+interface InboxViewProps {
+  onViewProfile?: (user: import("@/lib/types").User) => void
+}
+
+function mapApiConversationToConversation(apiConv: {
+  id: string
+  type: string
+  members: Array<{ id: string; displayName?: string; avatarUrl?: string | null; username: string }>
+  lastMessage: { id: string; content: string; senderId: string; createdAt: string } | null
+  unreadCount: number
+}): Conversation {
+  const participants: UserType[] = apiConv.members.map((m) => ({
+    id: m.id,
+    name: m.displayName ?? m.username,
+    username: m.username,
+    avatar: m.avatarUrl ?? "/placeholder.svg",
+    role: "model",
+    verified: false,
+    verificationLevel: "unverified",
+    email: "",
+    bio: "",
+    location: "",
+    followers: 0,
+    following: 0,
+    createdAt: new Date(),
+  }))
+  const lastMessage: Message = apiConv.lastMessage
+    ? {
+        id: apiConv.lastMessage.id,
+        conversationId: apiConv.id,
+        senderId: apiConv.lastMessage.senderId,
+        content: apiConv.lastMessage.content,
+        type: "text",
+        read: true,
+        createdAt: new Date(apiConv.lastMessage.createdAt),
+      }
+    : {
+        id: "",
+        conversationId: apiConv.id,
+        senderId: "",
+        content: "",
+        type: "text",
+        read: true,
+        createdAt: new Date(),
+      }
+  return {
+    id: apiConv.id,
+    type: apiConv.type as Conversation["type"],
+    participants,
+    lastMessage,
+    unreadCount: apiConv.unreadCount,
+    updatedAt: new Date(),
+  }
+}
+
+export function InboxView({ onViewProfile }: InboxViewProps = {}) {
   const { user } = useAuth()
+  const { conversations: apiConversations, isLoading: conversationsLoading, refresh: refreshConversations } = useConversations()
   const {
     getNotificationsForUser,
     getUnreadNotificationsCount,
@@ -45,13 +103,22 @@ export function InboxView() {
   const [activeTab, setActiveTab] = useState<InboxTab>("messages")
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
 
+  const conversations = (apiConversations ?? []).map(mapApiConversationToConversation)
+
   const notifications = user ? getNotificationsForUser(user.id) : []
   const unreadCount = user ? getUnreadNotificationsCount(user.id) : 0
   const offers = user ? getOffersForModel(user.id) : []
   const pendingOffers = user ? getPendingOffersForModel(user.id) : []
 
   if (selectedConversation) {
-    return <ChatView conversation={selectedConversation} onBack={() => setSelectedConversation(null)} />
+    return (
+      <ChatView
+        conversation={selectedConversation}
+        onBack={() => setSelectedConversation(null)}
+        onViewProfile={onViewProfile}
+        refreshConversations={refreshConversations}
+      />
+    )
   }
 
   const handleMarkAllRead = () => {
@@ -92,9 +159,11 @@ export function InboxView() {
       <AnimatePresence mode="wait">
         {activeTab === "messages" ? (
           <motion.div key="messages" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            {mockConversations.length > 0 ? (
+            {conversationsLoading ? (
+              <div className="text-center py-12 text-muted-foreground">Loading…</div>
+            ) : conversations.length > 0 ? (
               <div className="divide-y divide-border">
-                {mockConversations.map((conversation) => (
+                {conversations.map((conversation) => (
                   <ConversationItem
                     key={conversation.id}
                     conversation={conversation}
@@ -249,13 +318,15 @@ function ConversationItem({
             {otherUser.verified && <BadgeCheck className="w-4 h-4 text-foreground shrink-0" />}
           </div>
           <span className="text-xs text-muted-foreground shrink-0">
-            {formatMessageTime(conversation.lastMessage.createdAt)}
+            {conversation.lastMessage.id
+              ? formatMessageTime(conversation.lastMessage.createdAt)
+              : "—"}
           </span>
         </div>
         <p
           className={`text-sm truncate mt-0.5 ${conversation.unreadCount > 0 ? "text-foreground" : "text-muted-foreground"}`}
         >
-          {conversation.lastMessage.content}
+          {conversation.lastMessage.content || "No messages yet"}
         </p>
         {conversation.type === "casting" && (
           <Badge variant="secondary" className="mt-1 text-xs">
@@ -267,28 +338,41 @@ function ConversationItem({
   )
 }
 
-function ChatView({ conversation, onBack }: { conversation: Conversation; onBack: () => void }) {
+function ChatView({
+  conversation,
+  onBack,
+  onViewProfile,
+  refreshConversations,
+}: {
+  conversation: Conversation
+  onBack: () => void
+  onViewProfile?: (u: UserType) => void
+  refreshConversations?: () => void
+}) {
   const { user } = useAuth()
   const [message, setMessage] = useState("")
-  const [messages, setMessages] = useState<Message[]>(mockMessages.filter((m) => m.conversationId === conversation.id))
+  const { messages: apiMessages, isLoading: messagesLoading, refresh: refreshMessages } = useMessages(conversation.id)
+
+  const messages: Message[] = (apiMessages ?? []).map((m: { id: string; content: string; senderId: string; createdAt: string }) => ({
+    id: m.id,
+    conversationId: conversation.id,
+    senderId: m.senderId,
+    content: m.content,
+    type: "text" as const,
+    read: true,
+    createdAt: new Date(m.createdAt),
+  }))
 
   const otherUser = conversation.participants.find((p) => p.id !== user?.id) || conversation.participants[0]
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!message.trim() || !user) return
-
-    const newMessage: Message = {
-      id: crypto.randomUUID(),
-      conversationId: conversation.id,
-      senderId: user.id,
-      content: message.trim(),
-      type: "text",
-      read: false,
-      createdAt: new Date(),
-    }
-
-    setMessages([...messages, newMessage])
+    const text = message.trim()
     setMessage("")
+    const res = await api.sendMessage(conversation.id, text)
+    if (res.error) return
+    refreshMessages()
+    refreshConversations?.()
   }
 
   const groupMessagesByDate = (msgs: Message[]) => {
@@ -322,17 +406,23 @@ function ChatView({ conversation, onBack }: { conversation: Conversation; onBack
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <Avatar className="w-10 h-10">
-          <AvatarImage src={otherUser.avatar || "/placeholder.svg"} alt={otherUser.name} />
-          <AvatarFallback>{otherUser.name[0]}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1">
-          <div className="flex items-center gap-1">
-            <span className="font-medium">{otherUser.name}</span>
-            {otherUser.verified && <BadgeCheck className="w-4 h-4" />}
+        <button
+          type="button"
+          className="flex flex-1 items-center gap-3 min-w-0 text-left"
+          onClick={() => onViewProfile?.(otherUser)}
+        >
+          <Avatar className="w-10 h-10 shrink-0">
+            <AvatarImage src={otherUser.avatar || "/placeholder.svg"} alt={otherUser.name} />
+            <AvatarFallback>{otherUser.name[0]}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1">
+              <span className="font-medium truncate">{otherUser.name}</span>
+              {otherUser.verified && <BadgeCheck className="w-4 h-4 shrink-0" />}
+            </div>
+            <p className="text-xs text-muted-foreground truncate">{otherUser.role}</p>
           </div>
-          <p className="text-xs text-muted-foreground">{otherUser.role}</p>
-        </div>
+        </button>
       </div>
 
       {/* Messages */}
