@@ -9,7 +9,7 @@ import {
 } from "@/lib/auth"
 import { Role } from "@prisma/client"
 
-const VALID_ROLES: Role[] = [Role.MODEL, Role.AGENCY, Role.BRAND]
+const VALID_ROLES: Role[] = [Role.MODEL, Role.AGENCY, Role.BRAND, Role.CLIENT]
 
 export async function POST(request: NextRequest) {
   try {
@@ -102,9 +102,8 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[v0] Signup error details:", error)
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    return NextResponse.json({ error: `Signup failed: ${errorMessage}` }, { status: 500 })
+    console.error("Signup error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 

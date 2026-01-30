@@ -152,13 +152,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Real API signup
-    console.log("[v0] Attempting signup with:", { email: data.email, name: data.name, role: data.role, username: data.username })
     const result = await api.signup(data.email, data.password, data.name, data.role, data.username)
-    console.log("[v0] Signup result:", result)
     setIsLoading(false)
 
     if (result.error) {
-      console.error("[v0] Signup error:", result.error)
+      console.error("Signup error:", result.error)
       return false
     }
 
