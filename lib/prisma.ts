@@ -4,6 +4,8 @@
  * 
  * If you see this error, please update your imports to use:
  * import { sql } from "@/lib/db"
+ * 
+ * @see lib/db.ts for the Neon SQL client
  */
 
 // Export a proxy that throws helpful errors if any code still tries to use Prisma
