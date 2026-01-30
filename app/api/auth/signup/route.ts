@@ -61,6 +61,14 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Create profile record
+    await prisma.profile.create({
+      data: {
+        userId: user.id,
+        displayName,
+      },
+    })
+
     if (role === Role.MODEL) {
       await prisma.modelProfile.create({
         data: { userId: user.id },
