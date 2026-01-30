@@ -1,13 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { sql, toCamelCase } from "@/lib/db"
 import { verifyPassword, generateAccessToken, generateRefreshToken, setAuthCookies } from "@/lib/auth"
+
+interface UserRow {
+  id: string
+  email: string
+  username: string
+  passwordHash: string
+  role: string
+  displayName: string
+}
+
+interface ProfileRow {
+  userId: string
+  displayName: string
+  avatarUrl: string | null
+  verificationStatus: string
+}
 
 export async function POST(request: NextRequest) {
   const devHeaders: Record<string, string> =
     process.env.NODE_ENV === "development" ? { "X-Login-Fail-Reason": "" } : {}
 
   try {
-    // Dev: catch missing DATABASE_URL so app and seed use same DB
     if (process.env.NODE_ENV === "development" && !process.env.DATABASE_URL) {
       return NextResponse.json(
         { error: "Server: DATABASE_URL not set. Add it to .env or .env.local in project root and restart npm run dev." },
@@ -23,12 +38,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { profile: true },
-    })
+    // Query user from database using Neon
+    const userRows = await sql`
+      SELECT id, email, username, password_hash, role, display_name 
+      FROM users 
+      WHERE email = ${email}
+    `
 
-    if (!user) {
+    if (userRows.length === 0) {
       if (process.env.NODE_ENV === "development") {
         console.warn("[Login] No user found for email:", email)
         devHeaders["X-Login-Fail-Reason"] = "no-user"
@@ -39,11 +56,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Catch missing/invalid password hash (wrong schema or wrong DB)
+    const user = toCamelCase<UserRow>(userRows[0] as Record<string, unknown>)
+
+    // Catch missing/invalid password hash
     if (!user.passwordHash || typeof user.passwordHash !== "string") {
       if (process.env.NODE_ENV === "development") {
         return NextResponse.json(
-          { error: "Server: user has no password hash. Re-run npm run db:seed from project root." },
+          { error: "Server: user has no password hash. Re-run database seed." },
           { status: 500 }
         )
       }
@@ -62,6 +81,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Get profile data
+    const profileRows = await sql`
+      SELECT user_id, display_name, avatar_url, verification_status 
+      FROM profiles 
+      WHERE user_id = ${user.id}
+    `
+    const profile = profileRows.length > 0 
+      ? toCamelCase<ProfileRow>(profileRows[0] as Record<string, unknown>) 
+      : null
+
     const accessToken = await generateAccessToken({
       userId: user.id,
       email: user.email,
@@ -71,7 +100,6 @@ export async function POST(request: NextRequest) {
 
     await setAuthCookies(accessToken, refreshToken)
 
-    const profile = user.profile
     return NextResponse.json({
       success: true,
       user: {
@@ -79,7 +107,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
         role: user.role.toLowerCase(),
         username: user.username,
-        displayName: profile?.displayName ?? user.username,
+        displayName: profile?.displayName ?? user.displayName ?? user.username,
         avatarUrl: profile?.avatarUrl ?? null,
         isVerified: profile ? profile.verificationStatus !== "UNVERIFIED" : false,
         onboardingComplete: !!profile,

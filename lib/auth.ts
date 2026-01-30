@@ -3,8 +3,7 @@ import { cookies } from "next/headers"
 import { createHash } from "crypto"
 import bcrypt from "bcryptjs"
 import { v4 as uuidv4 } from "uuid"
-import { prisma } from "./prisma"
-import { Role } from "@prisma/client"
+import { sql, toCamelCase } from "./db"
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "luxlane-secret-key-change-in-production")
 const ACCESS_TOKEN_EXPIRY = "15m"
@@ -31,7 +30,27 @@ export interface AuthUser {
   onboardingComplete: boolean
 }
 
-function roleToLower(role: Role): UserRole {
+interface UserRow {
+  id: string
+  email: string
+  username: string
+  role: string
+  displayName: string
+}
+
+interface ProfileRow {
+  userId: string
+  displayName: string
+  avatarUrl: string | null
+  verificationStatus: string
+}
+
+interface RefreshTokenRow {
+  userId: string
+  expiresAt: Date
+}
+
+function roleToLower(role: string): UserRole {
   return role.toLowerCase() as UserRole
 }
 
@@ -54,13 +73,10 @@ export async function generateRefreshToken(userId: string): Promise<string> {
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS)
 
-  await prisma.refreshToken.create({
-    data: {
-      userId,
-      tokenHash: hashToken(token),
-      expiresAt,
-    },
-  })
+  await sql`
+    INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+    VALUES (${userId}, ${hashToken(token)}, ${expiresAt})
+  `
 
   return token
 }
@@ -78,28 +94,30 @@ export async function verifyAccessToken(token: string): Promise<JWTPayload | nul
 // Verify refresh token (check DB)
 export async function verifyRefreshToken(token: string): Promise<string | null> {
   const hash = hashToken(token)
-  const row = await prisma.refreshToken.findFirst({
-    where: { tokenHash: hash, revoked: false },
-  })
-  if (!row || row.expiresAt < new Date()) return null
+  const rows = await sql`
+    SELECT user_id, expires_at FROM refresh_tokens 
+    WHERE token_hash = ${hash} AND revoked = false
+    LIMIT 1
+  `
+  if (rows.length === 0) return null
+  const row = toCamelCase<RefreshTokenRow>(rows[0] as Record<string, unknown>)
+  if (new Date(row.expiresAt) < new Date()) return null
   return row.userId
 }
 
 // Revoke refresh token
 export async function revokeRefreshToken(token: string): Promise<void> {
   const hash = hashToken(token)
-  await prisma.refreshToken.updateMany({
-    where: { tokenHash: hash },
-    data: { revoked: true },
-  })
+  await sql`
+    UPDATE refresh_tokens SET revoked = true WHERE token_hash = ${hash}
+  `
 }
 
 // Revoke all refresh tokens for user
 export async function revokeAllUserTokens(userId: string): Promise<void> {
-  await prisma.refreshToken.updateMany({
-    where: { userId },
-    data: { revoked: true },
-  })
+  await sql`
+    UPDATE refresh_tokens SET revoked = true WHERE user_id = ${userId}
+  `
 }
 
 // Hash password
@@ -120,18 +138,23 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   if (accessToken) {
     const payload = await verifyAccessToken(accessToken)
     if (payload) {
-      const user = await prisma.user.findUnique({
-        where: { id: payload.userId },
-        include: { profile: true },
-      })
-      if (user) {
-        const profile = user.profile
+      const userRows = await sql`
+        SELECT id, email, username, role, display_name FROM users WHERE id = ${payload.userId}
+      `
+      if (userRows.length > 0) {
+        const user = toCamelCase<UserRow>(userRows[0] as Record<string, unknown>)
+        const profileRows = await sql`
+          SELECT user_id, display_name, avatar_url, verification_status FROM profiles WHERE user_id = ${user.id}
+        `
+        const profile = profileRows.length > 0 
+          ? toCamelCase<ProfileRow>(profileRows[0] as Record<string, unknown>) 
+          : null
         return {
           id: user.id,
           email: user.email,
           role: roleToLower(user.role),
           username: user.username,
-          displayName: profile?.displayName ?? user.username,
+          displayName: profile?.displayName ?? user.displayName ?? user.username,
           avatarUrl: profile?.avatarUrl ?? null,
           isVerified: profile ? profile.verificationStatus !== "UNVERIFIED" : false,
           onboardingComplete: !!profile,
@@ -147,11 +170,18 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const userId = await verifyRefreshToken(refreshToken)
   if (!userId) return null
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { profile: true },
-  })
-  if (!user) return null
+  const userRows = await sql`
+    SELECT id, email, username, role, display_name FROM users WHERE id = ${userId}
+  `
+  if (userRows.length === 0) return null
+  const user = toCamelCase<UserRow>(userRows[0] as Record<string, unknown>)
+
+  const profileRows = await sql`
+    SELECT user_id, display_name, avatar_url, verification_status FROM profiles WHERE user_id = ${user.id}
+  `
+  const profile = profileRows.length > 0 
+    ? toCamelCase<ProfileRow>(profileRows[0] as Record<string, unknown>) 
+    : null
 
   await revokeRefreshToken(refreshToken)
   const newAccessToken = await generateAccessToken({
@@ -162,13 +192,12 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const newRefreshToken = await generateRefreshToken(user.id)
   await setAuthCookies(newAccessToken, newRefreshToken)
 
-  const profile = user.profile
   return {
     id: user.id,
     email: user.email,
     role: roleToLower(user.role),
     username: user.username,
-    displayName: profile?.displayName ?? user.username,
+    displayName: profile?.displayName ?? user.displayName ?? user.username,
     avatarUrl: profile?.avatarUrl ?? null,
     isVerified: profile ? profile.verificationStatus !== "UNVERIFIED" : false,
     onboardingComplete: !!profile,
@@ -214,8 +243,8 @@ export async function generateUniqueUsername(displayName: string): Promise<strin
   let counter = 1
 
   while (true) {
-    const existing = await prisma.user.findUnique({ where: { username } })
-    if (!existing) break
+    const existing = await sql`SELECT id FROM users WHERE username = ${username}`
+    if (existing.length === 0) break
     username = `${base}${counter}`
     counter++
   }

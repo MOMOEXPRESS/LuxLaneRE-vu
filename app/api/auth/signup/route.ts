@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { sql } from "@/lib/db"
 import {
   hashPassword,
   generateAccessToken,
@@ -7,9 +7,8 @@ import {
   setAuthCookies,
   generateUniqueUsername,
 } from "@/lib/auth"
-import { Role } from "@prisma/client"
 
-const VALID_ROLES: Role[] = [Role.MODEL, Role.AGENCY, Role.BRAND]
+const VALID_ROLES = ["MODEL", "AGENCY", "BRAND"]
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,10 +20,10 @@ export async function POST(request: NextRequest) {
     }
 
     const roleUpper = String(roleInput).toUpperCase()
-    if (!VALID_ROLES.includes(roleUpper as Role)) {
+    if (!VALID_ROLES.includes(roleUpper)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 })
     }
-    const role = roleUpper as Role
+    const role = roleUpper
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
@@ -35,10 +34,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 })
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-    })
-    if (existingUser) {
+    // Check if email already exists
+    const existingUser = await sql`
+      SELECT id FROM users WHERE email = ${email.toLowerCase()}
+    `
+    if (existingUser.length > 0) {
       return NextResponse.json({ error: "Email already registered" }, { status: 409 })
     }
 
@@ -49,42 +49,47 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(password)
     const normalizedEmail = email.toLowerCase()
 
-    const user = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        username,
-        passwordHash,
-        role,
-      },
-    })
+    // Create user
+    const userResult = await sql`
+      INSERT INTO users (email, username, password_hash, role, display_name)
+      VALUES (${normalizedEmail}, ${username}, ${passwordHash}, ${role}::role, ${displayName})
+      RETURNING id, email, username, role
+    `
+    const user = userResult[0]
 
-    await prisma.profile.create({
-      data: {
-        userId: user.id,
-        displayName,
-      },
-    })
+    // Create profile
+    await sql`
+      INSERT INTO profiles (user_id, display_name)
+      VALUES (${user.id}, ${displayName})
+    `
 
-    if (role === Role.MODEL) {
-      await prisma.modelProfile.create({
-        data: { userId: user.id },
-      })
-    } else if (role === Role.AGENCY) {
-      await prisma.agencyProfile.create({
-        data: { userId: user.id, agencyName: displayName },
-      })
-    } else if (role === Role.BRAND) {
-      await prisma.brandProfile.create({
-        data: { userId: user.id, brandName: displayName },
-      })
+    // Create role-specific profile
+    if (role === "MODEL") {
+      await sql`
+        INSERT INTO model_profiles (user_id)
+        VALUES (${user.id})
+        ON CONFLICT (user_id) DO NOTHING
+      `
+    } else if (role === "AGENCY") {
+      await sql`
+        INSERT INTO agency_profiles (user_id, agency_name)
+        VALUES (${user.id}, ${displayName})
+        ON CONFLICT (user_id) DO NOTHING
+      `
+    } else if (role === "BRAND") {
+      await sql`
+        INSERT INTO brand_profiles (user_id, brand_name)
+        VALUES (${user.id}, ${displayName})
+        ON CONFLICT (user_id) DO NOTHING
+      `
     }
 
     const accessToken = await generateAccessToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role.toLowerCase() as "model" | "agency" | "brand" | "client",
+      userId: user.id as string,
+      email: user.email as string,
+      role: (user.role as string).toLowerCase() as "model" | "agency" | "brand" | "client",
     })
-    const refreshToken = await generateRefreshToken(user.id)
+    const refreshToken = await generateRefreshToken(user.id as string)
 
     await setAuthCookies(accessToken, refreshToken)
 
@@ -93,7 +98,7 @@ export async function POST(request: NextRequest) {
       user: {
         id: user.id,
         email: user.email,
-        role: user.role.toLowerCase(),
+        role: (user.role as string).toLowerCase(),
         username: user.username,
         displayName,
         avatarUrl: null,
@@ -111,8 +116,8 @@ async function ensureUniqueUsername(base: string): Promise<string> {
   let username = base
   let counter = 1
   while (true) {
-    const existing = await prisma.user.findUnique({ where: { username } })
-    if (!existing) return username
+    const existing = await sql`SELECT id FROM users WHERE username = ${username}`
+    if (existing.length === 0) return username
     username = `${base}${counter}`
     counter++
   }

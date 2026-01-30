@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role role NOT NULL,
+    display_name TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -66,13 +67,14 @@ CREATE TABLE IF NOT EXISTS user_settings (
 );
 
 -- Insert a demo user (password: password123)
-INSERT INTO users (id, email, username, password_hash, role, created_at)
+INSERT INTO users (id, email, username, password_hash, role, display_name, created_at)
 VALUES (
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     'sofia@luxlane.demo',
     'sofia_demo',
     '$2b$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJptJ/op0lSsvqNu.1u',
     'MODEL',
+    'Sofia Martinez',
     NOW()
 )
 ON CONFLICT (email) DO NOTHING;
