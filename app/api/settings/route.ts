@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { prisma } from "@/lib/prisma"
+import { sql } from "@/lib/db"
 import { verifyAccessToken } from "@/lib/auth"
 import { validateBody, updateSettingsSchema } from "@/lib/validations"
 
@@ -19,27 +19,35 @@ export async function GET() {
   }
 
   try {
-    let settings = await prisma.userSettings.findUnique({
-      where: { userId },
-    })
-    if (!settings) {
-      settings = await prisma.userSettings.create({
-        data: { userId },
-      })
+    let settingsResult = await sql`
+      SELECT * FROM user_settings WHERE user_id = ${userId}
+    `
+    
+    if (settingsResult.length === 0) {
+      // Create default settings
+      await sql`
+        INSERT INTO user_settings (user_id, dark_mode, push_notifs, email_notifs, privacy_mode)
+        VALUES (${userId}, true, true, true, 'public')
+      `
+      settingsResult = await sql`
+        SELECT * FROM user_settings WHERE user_id = ${userId}
+      `
     }
+    
+    const settings = settingsResult[0]
     return NextResponse.json({
-      userId: settings.userId,
-      darkMode: settings.darkMode,
-      pushNotifs: settings.pushNotifs,
-      emailNotifs: settings.emailNotifs,
-      privacyMode: settings.privacyMode,
+      userId: settings.user_id,
+      darkMode: settings.dark_mode,
+      pushNotifs: settings.push_notifs,
+      emailNotifs: settings.email_notifs,
+      privacyMode: settings.privacy_mode,
       notifications: {
-        push: settings.pushNotifs,
-        email: settings.emailNotifs,
+        push: settings.push_notifs,
+        email: settings.email_notifs,
       },
-      privacy: { profileVisibility: settings.privacyMode },
-      createdAt: settings.createdAt.toISOString(),
-      updatedAt: settings.updatedAt.toISOString(),
+      privacy: { profileVisibility: settings.privacy_mode },
+      createdAt: settings.created_at ? new Date(settings.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: settings.updated_at ? new Date(settings.updated_at).toISOString() : new Date().toISOString(),
     })
   } catch (error) {
     console.error("Failed to get settings:", error)
@@ -65,35 +73,42 @@ export async function PATCH(request: Request) {
   const privacyModeVal = privacyMode ?? privacy?.profileVisibility
 
   try {
-    const settings = await prisma.userSettings.upsert({
-      where: { userId },
-      create: {
-        userId,
-        darkMode: darkMode ?? true,
-        pushNotifs: pushNotifsVal ?? true,
-        emailNotifs: emailNotifsVal ?? true,
-        privacyMode: privacyModeVal ?? "public",
-      },
-      update: {
-        ...(darkMode !== undefined && { darkMode }),
-        ...(pushNotifsVal !== undefined && { pushNotifs: pushNotifsVal }),
-        ...(emailNotifsVal !== undefined && { emailNotifs: emailNotifsVal }),
-        ...(privacyModeVal !== undefined && { privacyMode: privacyModeVal }),
-      },
-    })
+    // Upsert settings
+    await sql`
+      INSERT INTO user_settings (user_id, dark_mode, push_notifs, email_notifs, privacy_mode)
+      VALUES (
+        ${userId},
+        ${darkMode ?? true},
+        ${pushNotifsVal ?? true},
+        ${emailNotifsVal ?? true},
+        ${privacyModeVal ?? 'public'}
+      )
+      ON CONFLICT (user_id) DO UPDATE SET
+        dark_mode = COALESCE(${darkMode}, user_settings.dark_mode),
+        push_notifs = COALESCE(${pushNotifsVal}, user_settings.push_notifs),
+        email_notifs = COALESCE(${emailNotifsVal}, user_settings.email_notifs),
+        privacy_mode = COALESCE(${privacyModeVal}, user_settings.privacy_mode),
+        updated_at = NOW()
+    `
+    
+    const settingsResult = await sql`
+      SELECT * FROM user_settings WHERE user_id = ${userId}
+    `
+    const settings = settingsResult[0]
+    
     return NextResponse.json({
-      userId: settings.userId,
-      darkMode: settings.darkMode,
-      pushNotifs: settings.pushNotifs,
-      emailNotifs: settings.emailNotifs,
-      privacyMode: settings.privacyMode,
+      userId: settings.user_id,
+      darkMode: settings.dark_mode,
+      pushNotifs: settings.push_notifs,
+      emailNotifs: settings.email_notifs,
+      privacyMode: settings.privacy_mode,
       notifications: {
-        push: settings.pushNotifs,
-        email: settings.emailNotifs,
+        push: settings.push_notifs,
+        email: settings.email_notifs,
       },
-      privacy: { profileVisibility: settings.privacyMode },
-      createdAt: settings.createdAt.toISOString(),
-      updatedAt: settings.updatedAt.toISOString(),
+      privacy: { profileVisibility: settings.privacy_mode },
+      createdAt: settings.created_at ? new Date(settings.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: settings.updated_at ? new Date(settings.updated_at).toISOString() : new Date().toISOString(),
     })
   } catch (error) {
     console.error("Failed to update settings:", error)

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { sql } from "@/lib/db"
 import {
   verifyRefreshToken,
   revokeRefreshToken,
@@ -22,14 +22,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid or expired refresh token" }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { profile: true },
-    })
+    // Get user with profile
+    const users = await sql`
+      SELECT 
+        u.id, u.email, u.username, u.role, u.display_name,
+        p.display_name as profile_display_name,
+        p.avatar_url,
+        p.verification_status
+      FROM users u
+      LEFT JOIN profiles p ON p.user_id = u.id
+      WHERE u.id = ${userId}
+    `
 
-    if (!user) {
+    if (users.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
+
+    const user = users[0]
 
     await revokeRefreshToken(refreshTokenCookie)
 
@@ -42,7 +51,6 @@ export async function POST(request: NextRequest) {
 
     await setAuthCookies(accessToken, newRefreshToken)
 
-    const profile = user.profile
     return NextResponse.json({
       success: true,
       user: {
@@ -50,10 +58,10 @@ export async function POST(request: NextRequest) {
         email: user.email,
         role: user.role.toLowerCase(),
         username: user.username,
-        displayName: profile?.displayName ?? user.username,
-        avatarUrl: profile?.avatarUrl ?? null,
-        isVerified: profile ? profile.verificationStatus !== "UNVERIFIED" : false,
-        onboardingComplete: !!profile,
+        displayName: user.profile_display_name ?? user.display_name ?? user.username,
+        avatarUrl: user.avatar_url ?? null,
+        isVerified: user.verification_status ? user.verification_status !== "UNVERIFIED" : false,
+        onboardingComplete: !!user.profile_display_name,
       },
     })
   } catch (error) {

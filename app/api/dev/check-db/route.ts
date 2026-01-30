@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { sql } from "@/lib/db"
 
 /**
  * GET /api/dev/check-db
@@ -7,18 +7,16 @@ import { prisma } from "@/lib/prisma"
  * If userCount is 0, run `npm run db:seed` from project root (or fix DATABASE_URL).
  */
 export async function GET() {
-  if (process.env.NODE_ENV !== "development") {
-    return NextResponse.json({ error: "Not available" }, { status: 404 })
-  }
   try {
-    const userCount = await prisma.user.count()
-    const hasSofia = await prisma.user.findUnique({
-      where: { email: "sofia@luxlane.demo" },
-      select: { id: true },
-    })
+    const countResult = await sql`SELECT COUNT(*) as count FROM users`
+    const userCount = parseInt(countResult[0]?.count ?? '0')
+    
+    const sofiaResult = await sql`SELECT id FROM users WHERE email = 'sofia@luxlane.demo' LIMIT 1`
+    const hasSofia = sofiaResult.length > 0
+
     return NextResponse.json({
       userCount,
-      hasTestUser: !!hasSofia,
+      hasTestUser: hasSofia,
       message:
         userCount === 0
           ? "No users in DB. Run: npm run db:seed (from project root)"
