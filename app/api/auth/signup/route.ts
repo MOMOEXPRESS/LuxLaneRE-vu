@@ -56,14 +56,8 @@ export async function POST(request: NextRequest) {
         email: normalizedEmail,
         username,
         passwordHash,
-        role,
-      },
-    })
-
-    await prisma.profile.create({
-      data: {
-        userId: user.id,
         displayName,
+        role,
       },
     })
 
