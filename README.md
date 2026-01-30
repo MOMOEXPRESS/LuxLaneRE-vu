@@ -9,15 +9,15 @@
 
 From anywhere, run:
 
-```bash
+\`\`\`bash
 cd /Users/j.pebalemaurice/Desktop/LuxLaneRE-vu && docker compose up -d
-```
+\`\`\`
 
 Then start the app (from the same directory):
 
-```bash
+\`\`\`bash
 npm run dev
-```
+\`\`\`
 
 Or use the helper script from the project root: `./start.sh` (starts Docker Postgres, then you can run `npm run dev`).
 
@@ -43,20 +43,20 @@ Continue building your app on:
 ## Local Setup
 
 1. **Start Postgres** (Docker):
-   ```bash
+   \`\`\`bash
    docker compose up -d
-   ```
+   \`\`\`
 
 2. **Environment**: Copy env example and set secrets:
-   ```bash
+   \`\`\`bash
    cp .env.example .env.local
-   ```
+   \`\`\`
    Edit `.env.local`: set `DATABASE_URL` (default works with Docker above) and `JWT_SECRET`.
 
 3. **Run the app** (from project root):
-   ```bash
+   \`\`\`bash
    npm run dev
-   ```
+   \`\`\`
    **First run:** If the DB has no users, the app will auto-apply migrations and run the seed on startup. Then log in with **sofia@luxlane.demo** / **password123**.
 
 4. **Manual DB reset/seed** (optional):
