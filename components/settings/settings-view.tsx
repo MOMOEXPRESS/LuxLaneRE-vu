@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   ArrowLeft,
   User,
@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
 import { useTheme } from "@/lib/theme-context"
 import { useStore } from "@/lib/store-context"
+import { useSettings } from "@/lib/hooks/use-settings"
 import type { UserRole, VerificationLevel } from "@/lib/types"
 
 interface SettingsViewProps {
@@ -38,6 +39,7 @@ type SettingsSection = "main" | "account" | "notifications" | "privacy" | "help"
 export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: SettingsViewProps) {
   const { user, logout, updateUser } = useAuth()
   const { theme, setTheme } = useTheme()
+  const { settings: apiSettings, updateSettings } = useSettings()
   const { getCastings, getActiveCastings, getApplications, reseed } = useStore()
   const [section, setSection] = useState<SettingsSection>("main")
   const [notifications, setNotifications] = useState({
@@ -46,6 +48,37 @@ export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: 
     offerAlerts: true,
     emailDigest: false,
   })
+
+  // Sync theme and notifications from API when settings load
+  useEffect(() => {
+    if (!apiSettings) return
+    if (apiSettings.darkMode !== undefined) {
+      setTheme(apiSettings.darkMode ? "dark" : "light")
+    }
+    const push = apiSettings.pushNotifs ?? apiSettings.notifications?.push ?? true
+    const email = apiSettings.emailNotifs ?? apiSettings.notifications?.email ?? false
+    setNotifications((prev) => ({
+      ...prev,
+      castingAlerts: push,
+      messageAlerts: push,
+      offerAlerts: push,
+      emailDigest: email,
+    }))
+  }, [apiSettings?.userId])
+
+  const handleThemeChange = (value: "light" | "dark" | "system") => {
+    setTheme(value)
+    updateSettings({ darkMode: value === "dark" }).catch(() => {})
+  }
+
+  const handleNotificationToggle = (key: string, value: boolean) => {
+    setNotifications((prev) => ({ ...prev, [key]: value }))
+    if (key === "emailDigest") {
+      updateSettings({ emailNotifs: value }).catch(() => {})
+    } else {
+      updateSettings({ pushNotifs: value }).catch(() => {})
+    }
+  }
 
   const handleLogout = () => {
     logout()
@@ -248,13 +281,13 @@ export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: 
               {themeOptions.map((option) => {
                 const Icon = option.icon
                 return (
-                  <button
-                    key={option.value}
-                    onClick={() => setTheme(option.value)}
-                    className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors ${
-                      theme === option.value ? "border-foreground bg-muted/50" : "border-border hover:bg-muted/30"
-                    }`}
-                  >
+                <button
+                  key={option.value}
+                  onClick={() => handleThemeChange(option.value)}
+                  className={`flex-1 flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors ${
+                    theme === option.value ? "border-foreground bg-muted/50" : "border-border hover:bg-muted/30"
+                  }`}
+                >
                     <Icon className="h-5 w-5" />
                     <span className="text-xs">{option.label}</span>
                   </button>
@@ -483,9 +516,7 @@ export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: 
                 </div>
                 <Switch
                   checked={value}
-                  onCheckedChange={() =>
-                    setNotifications((prev) => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))
-                  }
+                  onCheckedChange={(checked) => handleNotificationToggle(key, checked)}
                 />
               </div>
             )

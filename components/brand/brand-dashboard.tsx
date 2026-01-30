@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useAuth } from "@/lib/auth-context"
 import { useStore } from "@/lib/store-context"
+import { api, type AgencyRosterItem } from "@/lib/api-client"
 import type { Casting, CastingApplication, CastingType, User } from "@/lib/types"
 import {
   Plus,
@@ -30,11 +31,14 @@ import {
   X,
   Star,
   Bell,
+  UserCircle,
+  Send,
+  Loader2,
 } from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
 import { SettingsView } from "@/components/settings/settings-view"
 
-type BrandTab = "castings" | "submissions" | "messages" | "profile"
+type BrandTab = "castings" | "submissions" | "messages" | "my-models" | "profile"
 
 interface BrandDashboardProps {
   onViewCasting?: (casting: Casting) => void
@@ -65,6 +69,9 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
   const tabs: { id: BrandTab; label: string; icon: React.ReactNode }[] = [
     { id: "castings", label: "Castings", icon: <Briefcase className="w-5 h-5" /> },
     { id: "submissions", label: "Submissions", icon: <Users className="w-5 h-5" /> },
+    ...(user?.role === "agency"
+      ? [{ id: "my-models" as const, label: "My Models", icon: <UserCircle className="w-5 h-5" /> }]
+      : []),
     { id: "messages", label: "Messages", icon: <MessageSquare className="w-5 h-5" /> },
     { id: "profile", label: "Profile", icon: <Settings className="w-5 h-5" /> },
   ]
@@ -205,6 +212,18 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
           </motion.div>
         )}
 
+        {activeTab === "my-models" && user?.role === "agency" && (
+          <motion.div
+            key="my-models"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="p-4"
+          >
+            <AgencyMyModelsView onViewProfile={onViewProfile} />
+          </motion.div>
+        )}
+
         {activeTab === "messages" && (
           <motion.div
             key="messages"
@@ -235,6 +254,271 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
       <CreateCastingSheet open={showCreateCasting} onClose={() => setShowCreateCasting(false)} onAdd={addCasting} />
 
       {bottomNav}
+    </div>
+  )
+}
+
+const CASTING_TYPE_LABELS: Record<string, string> = {
+  RUNWAY: "Runway",
+  CAMPAIGN: "Campaign",
+  EDITORIAL: "Editorial",
+  EVENT: "Event",
+  OTHER: "Other",
+}
+
+const AVAILABILITY_LABELS: Record<string, string> = {
+  AVAILABLE: "Available",
+  HOLD: "On hold",
+  BOOKED: "Booked",
+}
+
+interface ApiCasting {
+  id: string
+  title: string
+  creator_name?: string
+  status?: string
+}
+
+function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) => void }) {
+  const [roster, setRoster] = useState<AgencyRosterItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [manageModel, setManageModel] = useState<AgencyRosterItem | null>(null)
+  const [proposeCastings, setProposeCastings] = useState<ApiCasting[]>([])
+  const [loadingCastings, setLoadingCastings] = useState(false)
+  const [proposingId, setProposingId] = useState<string | null>(null)
+
+  const fetchRoster = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    const res = await api.getAgencyRoster()
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+    if (res.data?.roster) setRoster(res.data.roster)
+  }, [])
+
+  useEffect(() => {
+    fetchRoster()
+  }, [fetchRoster])
+
+  const handleModelClick = useCallback(
+    (model: AgencyRosterItem) => {
+      if (!onViewProfile) return
+      const minimalUser: User = {
+        id: model.id,
+        username: model.username,
+        name: model.displayName,
+        email: model.email,
+        role: "model",
+        verified: model.verificationStatus !== "UNVERIFIED",
+        verificationLevel:
+          model.verificationStatus === "LUXLANE_VERIFIED"
+            ? "luxlane_verified"
+            : model.verificationStatus === "AGENCY_VERIFIED"
+              ? "agency_verified"
+              : "unverified",
+        avatar: model.avatarUrl ?? "",
+        bio: model.bio ?? "",
+        location: model.location ?? "",
+        followers: 0,
+        following: 0,
+        createdAt: new Date(),
+      }
+      onViewProfile(minimalUser)
+    },
+    [onViewProfile],
+  )
+
+  const openManageSheet = useCallback(async (model: AgencyRosterItem) => {
+    setManageModel(model)
+    setLoadingCastings(true)
+    setProposeCastings([])
+    const res = await api.getCastings({ status: "active", limit: 30 })
+    setLoadingCastings(false)
+    if (res.data?.castings) {
+      const list = (res.data.castings as ApiCasting[]) ?? []
+      setProposeCastings(list)
+    }
+  }, [])
+
+  const handlePropose = useCallback(async (castingId: string) => {
+    if (!manageModel || proposingId) return
+    setProposingId(castingId)
+    await api.inviteModelToCasting(castingId, manageModel.id)
+    setProposingId(null)
+    setProposeCastings((prev) => prev.filter((c) => c.id !== castingId))
+  }, [manageModel, proposingId])
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+        <Users className="w-10 h-10 animate-pulse mb-3" />
+        <p className="text-sm">Loading roster…</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-destructive">
+        <p className="text-sm">{error}</p>
+        <Button variant="outline" size="sm" className="mt-3" onClick={fetchRoster}>
+          Retry
+        </Button>
+      </div>
+    )
+  }
+
+  if (roster.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-lg">
+        <UserCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+        <p>No models in your roster yet</p>
+        <p className="text-sm mt-1">Models linked to your agency will appear here with their castings and availability.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground px-4">{roster.length} model{roster.length !== 1 ? "s" : ""} in your roster</p>
+      <div className="px-4 pb-4 pinterest-masonry">
+        {roster.map((model) => (
+          <Card
+            key={model.id}
+            className="overflow-hidden rounded-2xl border-0 bg-card shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+          >
+            <div
+              className="cursor-pointer"
+              onClick={() => handleModelClick(model)}
+            >
+            {/* Pin-style: avatar/image on top */}
+            <div className="aspect-[3/4] bg-muted relative flex items-center justify-center">
+              <img
+                src={model.avatarUrl ?? "/placeholder-user.jpg"}
+                alt={model.displayName}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute top-2 left-2 right-2 flex items-center gap-1.5 flex-wrap">
+                <Badge variant="secondary" className="text-[10px] h-5 shadow-sm">
+                  {AVAILABILITY_LABELS[model.availability] ?? model.availability}
+                </Badge>
+                {model.luxlaneScore > 0 && (
+                  <Badge variant="outline" className="text-[10px] h-5 shadow-sm bg-background/90 backdrop-blur">
+                    <Star className="w-3 h-3 mr-0.5" />
+                    {model.luxlaneScore}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            {/* Content below image */}
+            <div className="p-3">
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-sm truncate flex-1">{model.displayName}</span>
+                {model.verificationStatus !== "UNVERIFIED" && (
+                  <BadgeCheck className="w-4 h-4 text-foreground shrink-0" />
+                )}
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </div>
+              {model.location && (
+                <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{model.location}</span>
+                </div>
+              )}
+              {model.submissions.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-border">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Castings</p>
+                  <ul className="space-y-1">
+                    {model.submissions.slice(0, 3).map((s) => (
+                      <li key={s.id} className="text-xs flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        {s.casting && (
+                          <>
+                            <span className="font-medium truncate max-w-[120px]">{s.casting.title}</span>
+                            <Badge variant="outline" className="text-[10px] h-4 px-1">
+                              {s.status}
+                            </Badge>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                    {model.submissions.length > 3 && (
+                      <p className="text-[10px] text-muted-foreground">+{model.submissions.length - 3} more</p>
+                    )}
+                  </ul>
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-2 h-8 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openManageSheet(model)
+                }}
+              >
+                <Send className="w-3 h-3 mr-1.5" />
+                Propose to event
+              </Button>
+            </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <Sheet open={!!manageModel} onOpenChange={(open) => !open && setManageModel(null)}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          <SheetHeader>
+            <SheetTitle>
+              {manageModel ? `Propose ${manageModel.displayName} to event` : "Propose to event"}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto py-4">
+            {loadingCastings ? (
+              <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Loading castings…</span>
+              </div>
+            ) : proposeCastings.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No active castings to propose to.</p>
+            ) : (
+              <ul className="space-y-2 px-2">
+                {proposeCastings.map((c) => (
+                  <li key={c.id}>
+                    <Card className="p-3 flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm truncate">{c.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {c.creator_name ?? "Brand"}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="shrink-0"
+                        disabled={!!proposingId}
+                        onClick={() => handlePropose(c.id)}
+                      >
+                        {proposingId === c.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Send className="w-3.5 h-3.5 mr-1" />
+                            Propose
+                          </>
+                        )}
+                      </Button>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

@@ -14,6 +14,7 @@ interface HeaderProps {
   showNotifications?: boolean
   showAvatar?: boolean
   showBack?: boolean
+  onBack?: () => void
   onAvatarClick?: () => void
   onSearchClick?: () => void
   onSettingsClick?: () => void
@@ -27,6 +28,7 @@ export function Header({
   showNotifications = true,
   showAvatar = true,
   showBack = false,
+  onBack,
   onAvatarClick,
   onSearchClick,
   onSettingsClick,
@@ -38,7 +40,7 @@ export function Header({
     <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
       <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
         <div className="flex items-center gap-2">
-          {showBack && <BackButton />}
+          {showBack && <BackButton onBack={onBack} />}
           {showLogo && !showBack ? (
             <LuxlaneLogo size="sm" />
           ) : title ? (

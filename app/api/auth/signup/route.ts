@@ -1,103 +1,119 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import {
   hashPassword,
   generateAccessToken,
   generateRefreshToken,
   setAuthCookies,
   generateUniqueUsername,
-  type UserRole,
 } from "@/lib/auth"
-import { v4 as uuidv4 } from "uuid"
+import { Role } from "@prisma/client"
+
+const VALID_ROLES: Role[] = [Role.MODEL, Role.AGENCY, Role.BRAND]
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, displayName, role } = body
+    const { email, password, displayName, role: roleInput, username: usernameInput } = body
 
-    // Validate input
-    if (!email || !password || !displayName || !role) {
+    if (!email || !password || !displayName || !roleInput) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Validate role
-    const validRoles: UserRole[] = ["model", "agency", "brand", "client"]
-    if (!validRoles.includes(role)) {
+    const roleUpper = String(roleInput).toUpperCase()
+    if (!VALID_ROLES.includes(roleUpper as Role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 })
     }
+    const role = roleUpper as Role
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       return NextResponse.json({ error: "Invalid email format" }, { status: 400 })
     }
 
-    // Validate password strength
     if (password.length < 8) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 })
     }
 
-    // Check if email already exists
-    const existingUser = await db`
-      SELECT id FROM users WHERE email = ${email.toLowerCase()}
-    `
-
-    if (existingUser.length > 0) {
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    })
+    if (existingUser) {
       return NextResponse.json({ error: "Email already registered" }, { status: 409 })
     }
 
-    // Generate unique username
-    const username = await generateUniqueUsername(displayName)
+    const username = usernameInput
+      ? await ensureUniqueUsername(String(usernameInput).toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 30) || "user")
+      : await generateUniqueUsername(displayName)
 
-    // Hash password
     const passwordHash = await hashPassword(password)
+    const normalizedEmail = email.toLowerCase()
 
-    // Create user
-    const userId = uuidv4()
-    await db`
-      INSERT INTO users (id, email, password_hash, role, username, display_name)
-      VALUES (${userId}, ${email.toLowerCase()}, ${passwordHash}, ${role}, ${username}, ${displayName})
-    `
+    const user = await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        username,
+        passwordHash,
+        role,
+      },
+    })
 
-    // Create role-specific profile
-    if (role === "model") {
-      await db`
-        INSERT INTO model_profiles (user_id) VALUES (${userId})
-      `
-    } else if (role === "agency") {
-      await db`
-        INSERT INTO agency_profiles (user_id) VALUES (${userId})
-      `
-    } else if (role === "brand") {
-      await db`
-        INSERT INTO brand_profiles (user_id) VALUES (${userId})
-      `
+    await prisma.profile.create({
+      data: {
+        userId: user.id,
+        displayName,
+      },
+    })
+
+    if (role === Role.MODEL) {
+      await prisma.modelProfile.create({
+        data: { userId: user.id },
+      })
+    } else if (role === Role.AGENCY) {
+      await prisma.agencyProfile.create({
+        data: { userId: user.id, agencyName: displayName },
+      })
+    } else if (role === Role.BRAND) {
+      await prisma.brandProfile.create({
+        data: { userId: user.id, brandName: displayName },
+      })
     }
 
-    // Generate tokens
     const accessToken = await generateAccessToken({
-      userId,
-      email: email.toLowerCase(),
-      role,
+      userId: user.id,
+      email: user.email,
+      role: user.role.toLowerCase() as "model" | "agency" | "brand" | "client",
     })
-    const refreshToken = await generateRefreshToken(userId)
+    const refreshToken = await generateRefreshToken(user.id)
 
-    // Set cookies
     await setAuthCookies(accessToken, refreshToken)
 
     return NextResponse.json({
       success: true,
       user: {
-        id: userId,
-        email: email.toLowerCase(),
-        role,
-        username,
+        id: user.id,
+        email: user.email,
+        role: user.role.toLowerCase(),
+        username: user.username,
         displayName,
+        avatarUrl: null,
+        isVerified: false,
         onboardingComplete: false,
       },
     })
   } catch (error) {
     console.error("Signup error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+async function ensureUniqueUsername(base: string): Promise<string> {
+  let username = base
+  let counter = 1
+  while (true) {
+    const existing = await prisma.user.findUnique({ where: { username } })
+    if (!existing) return username
+    username = `${base}${counter}`
+    counter++
   }
 }

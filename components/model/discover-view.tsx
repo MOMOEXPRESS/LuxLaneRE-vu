@@ -111,7 +111,11 @@ export function DiscoverView({ onViewProfile, onViewCasting }: DiscoverViewProps
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.03 }}
                 >
-                  <CastingListCard casting={casting} onView={() => onViewCasting(casting)} />
+                  <CastingListCard
+                    casting={casting}
+                    onView={() => onViewCasting(casting)}
+                    onViewCreator={onViewProfile}
+                  />
                 </motion.div>
               ))}
             </div>
@@ -164,7 +168,15 @@ function UserCard({ user, onView }: { user: User; onView: () => void }) {
   )
 }
 
-function CastingListCard({ casting, onView }: { casting: Casting; onView: () => void }) {
+function CastingListCard({
+  casting,
+  onView,
+  onViewCreator,
+}: {
+  casting: Casting
+  onView: () => void
+  onViewCreator?: (user: User) => void
+}) {
   const typeLabels = {
     runway: "Runway",
     campaign: "Campaign",
@@ -177,11 +189,20 @@ function CastingListCard({ casting, onView }: { casting: Casting; onView: () => 
   return (
     <Card className="p-4 cursor-pointer hover:bg-muted/50 transition-colors" onClick={onView}>
       <div className="flex items-start gap-3">
-        <Avatar className="w-10 h-10">
-          <AvatarImage src={casting.creator.avatar || "/placeholder.svg"} alt={casting.creator.name} />
-          <AvatarFallback>{casting.creator.name[0]}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
+        <button
+          type="button"
+          className="flex items-center gap-3 min-w-0 shrink-0 text-left rounded-full focus:outline-none focus:ring-2 focus:ring-ring"
+          onClick={(e) => {
+            e.stopPropagation()
+            onViewCreator?.(casting.creator)
+          }}
+        >
+          <Avatar className="w-10 h-10">
+            <AvatarImage src={casting.creator.avatar || "/placeholder.svg"} alt={casting.creator.name} />
+            <AvatarFallback>{casting.creator.name[0]}</AvatarFallback>
+          </Avatar>
+        </button>
+        <div className="flex-1 min-w-0" onClick={onView}>
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="text-xs">
               {typeLabels[casting.type]}
@@ -193,14 +214,21 @@ function CastingListCard({ casting, onView }: { casting: Casting; onView: () => 
             )}
           </div>
           <p className="font-medium mt-1 truncate">{casting.title}</p>
-          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+          <button
+            type="button"
+            className="flex items-center gap-2 mt-1 text-xs text-muted-foreground hover:underline text-left"
+            onClick={(e) => {
+              e.stopPropagation()
+              onViewCreator?.(casting.creator)
+            }}
+          >
             <span>{casting.creator.name}</span>
             <span>•</span>
             <span className="flex items-center gap-1">
               <MapPin className="w-3 h-3" />
               {casting.location}
             </span>
-          </div>
+          </button>
         </div>
       </div>
     </Card>

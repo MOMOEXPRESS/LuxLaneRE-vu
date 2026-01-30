@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
@@ -9,65 +9,95 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Get base user data
-    const userData = await db`
-      SELECT id, email, role, username, display_name, avatar_url, bio, location, website,
-             is_verified, tier, onboarding_complete, created_at
-      FROM users WHERE id = ${user.id}
-    `
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: {
+        profile: true,
+        modelProfile: true,
+        agencyProfile: true,
+        brandProfile: true,
+      },
+    })
 
-    if (userData.length === 0) {
+    if (!dbUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const baseProfile = userData[0]
-    let roleProfile = null
-
-    // Get role-specific profile
-    if (user.role === "model") {
-      const modelData = await db`
-        SELECT height_cm, bust_cm, waist_cm, hips_cm, shoe_size, eye_color, hair_color,
-               date_of_birth, gender, ethnicity, experience_tags, agency_id, score, rank,
-               languages, availability
-        FROM model_profiles WHERE user_id = ${user.id}
-      `
-      if (modelData.length > 0) roleProfile = modelData[0]
-    } else if (user.role === "agency") {
-      const agencyData = await db`
-        SELECT agency_name, founded_year, model_count, specialties
-        FROM agency_profiles WHERE user_id = ${user.id}
-      `
-      if (agencyData.length > 0) roleProfile = agencyData[0]
-    } else if (user.role === "brand") {
-      const brandData = await db`
-        SELECT brand_name, industry, company_size
-        FROM brand_profiles WHERE user_id = ${user.id}
-      `
-      if (brandData.length > 0) roleProfile = brandData[0]
-    }
+    const profile = dbUser.profile
+    const roleProfile = dbUser.modelProfile ?? dbUser.agencyProfile ?? dbUser.brandProfile ?? null
 
     let digitalTwin = null
-    if (user.role === "model") {
-      const twinData = await db`
-        SELECT id, status, input_urls, preview_url, summary, created_at, updated_at
-        FROM digital_twins WHERE user_id = ${user.id}
-      `
-      if (twinData.length > 0) digitalTwin = twinData[0]
+    if (dbUser.modelProfile) {
+      const twin = await prisma.digitalTwin.findUnique({
+        where: { userId: dbUser.id },
+      })
+      if (twin) digitalTwin = { id: twin.userId, status: twin.status, previewUrl: twin.previewUrl, summary: twin.summary }
     }
 
-    // Get follower/following counts
-    const [followersCount, followingCount] = await Promise.all([
-      db`SELECT COUNT(*)::int as count FROM follows WHERE following_id = ${user.id}`,
-      db`SELECT COUNT(*)::int as count FROM follows WHERE follower_id = ${user.id}`,
+    const [followersCount, followingCount, portfolio] = await Promise.all([
+      prisma.follow.count({ where: { followingId: dbUser.id } }),
+      prisma.follow.count({ where: { followerId: dbUser.id } }),
+      prisma.mediaAsset.findMany({
+        where: { ownerId: dbUser.id, type: { in: ["PORTFOLIO", "POLAROID"] } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
     ])
+
+    const mp = dbUser.modelProfile
+    const details = (mp?.details as Record<string, unknown> | null) ?? {}
+    const measurements =
+      mp &&
+      (mp.heightCm != null ||
+        mp.bustCm != null ||
+        mp.waistCm != null ||
+        mp.hipsCm != null ||
+        mp.shoeSize ||
+        mp.hair ||
+        mp.eyes)
+        ? {
+            height: mp.heightCm != null ? `${mp.heightCm} cm` : "",
+            bust: mp.bustCm != null ? `${mp.bustCm} cm` : "",
+            waist: mp.waistCm != null ? `${mp.waistCm} cm` : "",
+            hips: mp.hipsCm != null ? `${mp.hipsCm} cm` : "",
+            shoeSize: mp.shoeSize ?? "",
+            dressSize: (details.dressSize as string) ?? undefined,
+            hairColor: mp.hair ?? "",
+            eyeColor: mp.eyes ?? "",
+            heightCm: mp.heightCm ?? undefined,
+          }
+        : undefined
+    const experience = (details.experience as string[] | undefined) ?? []
+    const skinTone = (details.skinTone as string | undefined) ?? undefined
+    const availabilityStatus =
+      mp?.availability != null ? (mp.availability.toLowerCase() as "available" | "hold" | "booked") : undefined
 
     return NextResponse.json({
       profile: {
-        ...baseProfile,
+        id: dbUser.id,
+        email: dbUser.email,
+        username: dbUser.username,
+        displayName: profile?.displayName ?? dbUser.username,
+        name: profile?.displayName ?? dbUser.username,
+        avatarUrl: profile?.avatarUrl,
+        avatar: profile?.avatarUrl ?? "/placeholder.svg?height=400&width=400",
+        bio: profile?.bio,
+        location: profile?.location,
+        role: dbUser.role.toLowerCase(),
         roleProfile,
         digitalTwin,
-        followersCount: followersCount[0]?.count || 0,
-        followingCount: followingCount[0]?.count || 0,
+        followersCount,
+        followingCount,
+        verificationStatus: profile?.verificationStatus ?? "UNVERIFIED",
+        isVerified: profile ? profile.verificationStatus !== "UNVERIFIED" : false,
+        score: profile?.score ?? 0,
+        portfolio: portfolio.map((p) => ({ id: p.id, url: p.url, type: p.type })),
+        measurements,
+        languages: mp?.languages ?? [],
+        experience,
+        skinTone,
+        availabilityStatus,
+        createdAt: dbUser.createdAt.toISOString(),
       },
     })
   } catch (error) {
@@ -84,26 +114,31 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { displayName, bio, location, website, avatarUrl } = body
+    const { displayName, bio, location, avatarUrl } = body
 
-    if (displayName && displayName.length > 40) {
+    if (displayName != null && displayName.length > 40) {
       return NextResponse.json({ error: "Display name must be 40 characters or less" }, { status: 400 })
     }
-    if (bio && bio.length > 160) {
+    if (bio != null && bio.length > 160) {
       return NextResponse.json({ error: "Bio must be 160 characters or less" }, { status: 400 })
     }
 
-    // Update base user profile
-    await db`
-      UPDATE users SET
-        display_name = COALESCE(${displayName}, display_name),
-        bio = COALESCE(${bio}, bio),
-        location = COALESCE(${location}, location),
-        website = COALESCE(${website}, website),
-        avatar_url = COALESCE(${avatarUrl}, avatar_url),
-        updated_at = NOW()
-      WHERE id = ${user.id}
-    `
+    await prisma.profile.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        displayName: displayName ?? user.username,
+        ...(bio != null && { bio }),
+        ...(location != null && { location }),
+        ...(avatarUrl != null && { avatarUrl }),
+      },
+      update: {
+        ...(displayName != null && { displayName }),
+        ...(bio != null && { bio }),
+        ...(location != null && { location }),
+        ...(avatarUrl != null && { avatarUrl }),
+      },
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

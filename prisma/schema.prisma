@@ -78,19 +78,14 @@ enum TwinStatus {
 }
 
 model User {
-  id                 String   @id @default(uuid())
-  email              String   @unique
-  passwordHash       String
-  role               Role
-  username           String   @unique
-  displayName        String
-  bio                String?
-  locationCity       String?
-  avatarUrl          String?
-  onboardingComplete Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
 
+  profile             Profile?
   modelProfile        ModelProfile?
   agencyProfile       AgencyProfile?
   brandProfile        BrandProfile?
@@ -102,10 +97,35 @@ model User {
   messages            Message[]             @relation("sentMessages")
   castings            Casting[]             @relation("createdCastings")
   submissions         Submission[]          @relation("modelSubmissions")
+  savedCastings       SavedCasting[]
   mediaAssets         MediaAsset[]
   settings            UserSettings?
+  posts               Post[]
+  postLikes           PostLike[]
+  postSaves           PostSave[]
+  comments            Comment[]
 
   @@map("users")
+}
+
+model Profile {
+  userId             String   @id
+  displayName        String
+  bio                String?
+  location           String?
+  height             String?
+  hair               String?
+  eyes               String?
+  experience         String?
+  verificationStatus VerificationLevel @default(UNVERIFIED)
+  score              Int      @default(0)
+  avatarUrl          String?
+  coverUrl           String?
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
 }
 
 model RefreshToken {
@@ -136,6 +156,7 @@ model ModelProfile {
   agencyId          String?
   verificationLevel VerificationLevel  @default(UNVERIFIED)
   luxlaneScore      Int                @default(0)
+  details           Json?              // extended: dressSize, inseam, experience tags, etc.
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   digitalTwin DigitalTwin?
@@ -196,10 +217,11 @@ model Casting {
   requireDigitalTwin      Boolean @default(false)
   maxSubmissionsPerAgency Int?
 
-  requirements CastingRequirement?
-  submissions  Submission[]
-  rooms        Conversation[]      @relation("castingRooms")
-  creator      User                @relation("createdCastings", fields: [createdBy], references: [id], onDelete: Cascade)
+  requirements   CastingRequirement?
+  submissions    Submission[]
+  savedBy        SavedCasting[]
+  rooms          Conversation[] @relation("castingRooms")
+  creator        User           @relation("createdCastings", fields: [createdBy], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -207,6 +229,19 @@ model Casting {
   @@index([status])
   @@index([createdBy])
   @@map("castings")
+}
+
+model SavedCasting {
+  userId    String
+  castingId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  casting Casting @relation(fields: [castingId], references: [id], onDelete: Cascade)
+
+  @@id([userId, castingId])
+  @@index([castingId])
+  @@map("saved_castings")
 }
 
 model CastingRequirement {
@@ -315,6 +350,7 @@ model DigitalTwin {
   status     TwinStatus @default(NONE)
   summary    Json?
   previewUrl String?
+  modelUrl   String?    // .glb / .usdz for 3D viewer
   updatedAt  DateTime   @updatedAt
 
   user ModelProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
@@ -323,14 +359,71 @@ model DigitalTwin {
 }
 
 model UserSettings {
-  userId        String   @id
-  darkMode      Boolean  @default(true)
-  notifications Json     @default("{}")
-  privacy       Json     @default("{}")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  userId       String   @id
+  pushNotifs   Boolean  @default(true)
+  emailNotifs  Boolean  @default(true)
+  darkMode     Boolean  @default(true)
+  privacyMode  String   @default("public")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_settings")
+}
+
+model Post {
+  id        String   @id @default(uuid())
+  userId    String
+  imageUrl  String
+  caption   String?
+  createdAt DateTime @default(now())
+
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes    PostLike[]
+  saves    PostSave[]
+  comments Comment[]
+
+  @@index([userId])
+  @@map("posts")
+}
+
+model PostLike {
+  userId String
+  postId String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([postId])
+  @@map("post_likes")
+}
+
+model PostSave {
+  userId   String
+  postId   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([postId])
+  @@map("post_saves")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("comments")
 }

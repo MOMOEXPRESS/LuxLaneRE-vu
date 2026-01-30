@@ -37,9 +37,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Model IDs are required" }, { status: 400 })
     }
 
-    // Verify all models belong to this agency
+    // Verify all models belong to this agency (column is "userId"/"agencyId" per Prisma schema)
     const models = await db`
-      SELECT user_id FROM model_profiles WHERE user_id = ANY(${modelIds}) AND agency_id = ${user.id}
+      SELECT "userId" FROM model_profiles WHERE "userId" = ANY(${modelIds}) AND "agencyId" = ${user.id}
     `
 
     if (models.length !== modelIds.length) {

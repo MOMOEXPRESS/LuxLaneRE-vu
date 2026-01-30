@@ -1,6 +1,36 @@
 // API Client for making requests to the backend
 const API_BASE = ""
 
+export interface AgencyRosterSubmission {
+  id: string
+  status: string
+  submittedAt: string
+  casting: {
+    id: string
+    title: string
+    type: string
+    status: string
+    location: string | null
+    startDate: string | null
+    endDate: string | null
+    deadline: string | null
+  } | null
+}
+
+export interface AgencyRosterItem {
+  id: string
+  username: string
+  email: string
+  displayName: string
+  avatarUrl: string | null
+  location: string | null
+  bio: string | null
+  verificationStatus: string
+  availability: string
+  luxlaneScore: number
+  submissions: AgencyRosterSubmission[]
+}
+
 interface ApiResponse<T> {
   data?: T
   error?: string
@@ -17,11 +47,12 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
 
 export const api = {
   // Auth
-  async signup(email: string, password: string, displayName: string, role: string) {
+  async signup(email: string, password: string, displayName: string, role: string, username?: string) {
     const response = await fetch(`${API_BASE}/api/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, displayName, role }),
+      credentials: "include",
+      body: JSON.stringify({ email, password, displayName, role, username }),
     })
     return handleResponse(response)
   },
@@ -30,13 +61,14 @@ export const api = {
     const response = await fetch(`${API_BASE}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ email, password }),
     })
     return handleResponse(response)
   },
 
   async logout() {
-    const response = await fetch(`${API_BASE}/api/auth/logout`, { method: "POST" })
+    const response = await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" })
     return handleResponse(response)
   },
 
@@ -46,7 +78,22 @@ export const api = {
   },
 
   async getCurrentUser() {
-    const response = await fetch(`${API_BASE}/api/auth/me`)
+    const response = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async getSettings() {
+    const response = await fetch(`${API_BASE}/api/settings`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async updateSettings(data: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE}/api/settings`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
     return handleResponse(response)
   },
 
@@ -66,7 +113,7 @@ export const api = {
   },
 
   async getProfile(username: string) {
-    const response = await fetch(`${API_BASE}/api/profiles/${username}`)
+    const response = await fetch(`${API_BASE}/api/profiles/${username}`, { credentials: "include" })
     return handleResponse(response)
   },
 
@@ -74,6 +121,7 @@ export const api = {
     const response = await fetch(`${API_BASE}/api/profiles/model`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(data),
     })
     return handleResponse(response)
@@ -96,6 +144,79 @@ export const api = {
 
   async unfollow(userId: string) {
     const response = await fetch(`${API_BASE}/api/follows/${userId}`, { method: "DELETE" })
+    return handleResponse(response)
+  },
+
+  // Agency roster (My Models)
+  async getAgencyRoster() {
+    const response = await fetch(`${API_BASE}/api/agency/models`, { credentials: "include" })
+    return handleResponse<{ roster: AgencyRosterItem[] }>(response)
+  },
+
+  // Posts (feed)
+  async getPosts(params?: { limit?: number; cursor?: string }) {
+    const searchParams = new URLSearchParams()
+    if (params?.limit) searchParams.set("limit", String(params.limit))
+    if (params?.cursor) searchParams.set("cursor", params.cursor)
+    const url = `${API_BASE}/api/posts${searchParams.toString() ? `?${searchParams}` : ""}`
+    const response = await fetch(url, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async createPost(data: { imageUrl: string; caption?: string }) {
+    const response = await fetch(`${API_BASE}/api/posts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  async likePost(postId: string) {
+    const response = await fetch(`${API_BASE}/api/posts/${postId}/like`, {
+      method: "POST",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  async unlikePost(postId: string) {
+    const response = await fetch(`${API_BASE}/api/posts/${postId}/like`, {
+      method: "DELETE",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  async savePost(postId: string) {
+    const response = await fetch(`${API_BASE}/api/posts/${postId}/save`, {
+      method: "POST",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  async unsavePost(postId: string) {
+    const response = await fetch(`${API_BASE}/api/posts/${postId}/save`, {
+      method: "DELETE",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  async getComments(postId: string) {
+    const response = await fetch(`${API_BASE}/api/posts/${postId}/comments`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async addComment(postId: string, body: string) {
+    const response = await fetch(`${API_BASE}/api/posts/${postId}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ body }),
+    })
     return handleResponse(response)
   },
 
@@ -148,7 +269,52 @@ export const api = {
     const response = await fetch(`${API_BASE}/api/castings/${id}/apply`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  async getCastingSubmission(castingId: string) {
+    const response = await fetch(`${API_BASE}/api/castings/${castingId}/submission`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async saveCasting(castingId: string) {
+    const response = await fetch(`${API_BASE}/api/castings/${castingId}/saved`, {
+      method: "POST",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  async unsaveCasting(castingId: string) {
+    const response = await fetch(`${API_BASE}/api/castings/${castingId}/saved`, {
+      method: "DELETE",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  async getCastingSaved(castingId: string) {
+    const response = await fetch(`${API_BASE}/api/castings/${castingId}/saved`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async getCastingTopMatches(castingId: string, limit = 10) {
+    const response = await fetch(
+      `${API_BASE}/api/castings/${castingId}/top-matches?limit=${limit}`,
+      { credentials: "include" }
+    )
+    return handleResponse<{ matches: Array<{ model: Record<string, unknown>; fitScore: Record<string, unknown> }> }>(response)
+  },
+
+  async inviteModelToCasting(castingId: string, modelId: string) {
+    const response = await fetch(`${API_BASE}/api/castings/${castingId}/invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ modelId }),
     })
     return handleResponse(response)
   },
@@ -208,12 +374,15 @@ export const api = {
 
   // Conversations
   async getConversations() {
-    const response = await fetch(`${API_BASE}/api/conversations`)
+    const response = await fetch(`${API_BASE}/api/conversations`, { credentials: "include" })
     return handleResponse(response)
   },
 
   async startDirectConversation(userId: string) {
-    const response = await fetch(`${API_BASE}/api/conversations/direct/${userId}`, { method: "POST" })
+    const response = await fetch(`${API_BASE}/api/conversations/direct/${userId}`, {
+      method: "POST",
+      credentials: "include",
+    })
     return handleResponse(response)
   },
 
@@ -221,7 +390,7 @@ export const api = {
     const url = before
       ? `${API_BASE}/api/conversations/${conversationId}/messages?before=${before}`
       : `${API_BASE}/api/conversations/${conversationId}/messages`
-    const response = await fetch(url)
+    const response = await fetch(url, { credentials: "include" })
     return handleResponse(response)
   },
 
@@ -229,6 +398,7 @@ export const api = {
     const response = await fetch(`${API_BASE}/api/conversations/${conversationId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ content, attachments }),
     })
     return handleResponse(response)
@@ -281,25 +451,32 @@ export const api = {
     const response = await fetch(`${API_BASE}/api/media/presign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ filename, contentType, type }),
     })
     return handleResponse(response)
   },
 
-  async confirmMedia(data: { key: string; url: string; thumbnailUrl?: string; type: string; caption?: string }) {
+  async confirmMedia(data: { url: string; type: string; meta?: Record<string, unknown> }) {
     const response = await fetch(`${API_BASE}/api/media/confirm`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(data),
     })
     return handleResponse(response)
+  },
+
+  /** Add a portfolio image by URL (MVP: paste public image URL). */
+  async addPortfolioImage(url: string) {
+    return this.confirmMedia({ url, type: "PORTFOLIO" })
   },
 
   async getMedia(ownerId?: string, type?: string) {
     const params = new URLSearchParams()
     if (ownerId) params.set("ownerId", ownerId)
     if (type) params.set("type", type)
-    const response = await fetch(`${API_BASE}/api/media?${params}`)
+    const response = await fetch(`${API_BASE}/api/media?${params}`, { credentials: "include" })
     return handleResponse(response)
   },
 }
