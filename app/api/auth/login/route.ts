@@ -7,15 +7,14 @@ export async function POST(request: NextRequest) {
     process.env.NODE_ENV === "development" ? { "X-Login-Fail-Reason": "" } : {}
 
   try {
-    // Dev: catch missing DATABASE_URL so app and seed use same DB
-    if (process.env.NODE_ENV === "development" && !process.env.DATABASE_URL) {
+    if (!process.env.DATABASE_URL) {
       return NextResponse.json(
-        { error: "Server: DATABASE_URL not set. Add it to .env or .env.local in project root and restart npm run dev." },
+        { error: "Server: DATABASE_URL not set. Add it in Vercel env vars (or .env locally) and redeploy." },
         { status: 500 }
       )
     }
 
-    const body = await request.json()
+    const body = await request.json().catch(() => ({}))
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : ""
     const password = typeof body.password === "string" ? body.password.trim() : ""
 
@@ -87,6 +86,15 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Login error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    const message = error instanceof Error ? error.message : ""
+    const isDbError = message.includes("connect") || message.includes("Can't reach") || message.includes("P1001") || message.includes("column") || message.includes("does not exist")
+    return NextResponse.json(
+      {
+        error: isDbError
+          ? "Database error. On Vercel: set DATABASE_URL, run migrations (prisma migrate deploy), and seed if needed."
+          : "Internal server error",
+      },
+      { status: 500 }
+    )
   }
 }

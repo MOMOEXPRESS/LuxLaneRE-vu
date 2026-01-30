@@ -13,6 +13,12 @@ const VALID_ROLES: Role[] = [Role.MODEL, Role.AGENCY, Role.BRAND]
 
 export async function POST(request: NextRequest) {
   try {
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json(
+        { error: "Server misconfigured: database not set. Add DATABASE_URL in Vercel (or .env) and redeploy." },
+        { status: 500 }
+      )
+    }
     const body = await request.json()
     const { email, password, displayName, role: roleInput, username: usernameInput } = body
 
@@ -103,7 +109,16 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Signup error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Internal server error"
+    const isDbError = message.includes("connect") || message.includes("Can't reach") || message.includes("P1001")
+    return NextResponse.json(
+      {
+        error: isDbError
+          ? "Database unavailable. On Vercel: add a hosted Postgres (Neon/Vercel Postgres), set DATABASE_URL, and run migrations."
+          : "Internal server error",
+      },
+      { status: 500 }
+    )
   }
 }
 
