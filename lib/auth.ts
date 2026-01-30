@@ -1,8 +1,10 @@
 import { SignJWT, jwtVerify } from "jose"
 import { cookies } from "next/headers"
-import { sql } from "./db"
+import { createHash } from "crypto"
 import bcrypt from "bcryptjs"
 import { v4 as uuidv4 } from "uuid"
+import { prisma } from "./prisma"
+import { Role } from "@prisma/client"
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "luxlane-secret-key-change-in-production")
 const ACCESS_TOKEN_EXPIRY = "15m"
@@ -29,6 +31,14 @@ export interface AuthUser {
   onboardingComplete: boolean
 }
 
+function roleToLower(role: Role): UserRole {
+  return role.toLowerCase() as UserRole
+}
+
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex")
+}
+
 // Generate access token (short-lived)
 export async function generateAccessToken(payload: Omit<JWTPayload, "iat" | "exp">): Promise<string> {
   return new SignJWT(payload)
@@ -44,11 +54,13 @@ export async function generateRefreshToken(userId: string): Promise<string> {
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS)
 
-  // Store in database
-  await sql`
-    INSERT INTO refresh_tokens (user_id, token, expires_at)
-    VALUES (${userId}, ${token}, ${expiresAt})
-  `
+  await prisma.refreshToken.create({
+    data: {
+      userId,
+      tokenHash: hashToken(token),
+      expiresAt,
+    },
+  })
 
   return token
 }
@@ -65,27 +77,29 @@ export async function verifyAccessToken(token: string): Promise<JWTPayload | nul
 
 // Verify refresh token (check DB)
 export async function verifyRefreshToken(token: string): Promise<string | null> {
-  const result = await sql`
-    SELECT user_id FROM refresh_tokens
-    WHERE token = ${token} AND expires_at > NOW() AND revoked = false
-  `
-
-  if (result.length === 0) return null
-  return result[0].user_id
+  const hash = hashToken(token)
+  const row = await prisma.refreshToken.findFirst({
+    where: { tokenHash: hash, revoked: false },
+  })
+  if (!row || row.expiresAt < new Date()) return null
+  return row.userId
 }
 
 // Revoke refresh token
 export async function revokeRefreshToken(token: string): Promise<void> {
-  await sql`
-    UPDATE refresh_tokens SET revoked = true WHERE token = ${token}
-  `
+  const hash = hashToken(token)
+  await prisma.refreshToken.updateMany({
+    where: { tokenHash: hash },
+    data: { revoked: true },
+  })
 }
 
 // Revoke all refresh tokens for user
 export async function revokeAllUserTokens(userId: string): Promise<void> {
-  await sql`
-    UPDATE refresh_tokens SET revoked = true WHERE user_id = ${userId}
-  `
+  await prisma.refreshToken.updateMany({
+    where: { userId },
+    data: { revoked: true },
+  })
 }
 
 // Hash password
@@ -98,33 +112,66 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash)
 }
 
-// Get current user from request
+// Get current user from request (tries refresh token if access token missing/expired)
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
 
-  if (!accessToken) return null
+  if (accessToken) {
+    const payload = await verifyAccessToken(accessToken)
+    if (payload) {
+      const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        include: { profile: true },
+      })
+      if (user) {
+        const profile = user.profile
+        return {
+          id: user.id,
+          email: user.email,
+          role: roleToLower(user.role),
+          username: user.username,
+          displayName: profile?.displayName ?? user.username,
+          avatarUrl: profile?.avatarUrl ?? null,
+          isVerified: profile ? profile.verificationStatus !== "UNVERIFIED" : false,
+          onboardingComplete: !!profile,
+        }
+      }
+    }
+  }
 
-  const payload = await verifyAccessToken(accessToken)
-  if (!payload) return null
+  // Access token missing or expired – try refresh token
+  const refreshToken = cookieStore.get("refresh_token")?.value
+  if (!refreshToken) return null
 
-  const result = await sql`
-    SELECT id, email, role, username, display_name, avatar_url, is_verified, onboarding_complete
-    FROM users WHERE id = ${payload.userId}
-  `
+  const userId = await verifyRefreshToken(refreshToken)
+  if (!userId) return null
 
-  if (result.length === 0) return null
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { profile: true },
+  })
+  if (!user) return null
 
-  const user = result[0]
+  await revokeRefreshToken(refreshToken)
+  const newAccessToken = await generateAccessToken({
+    userId: user.id,
+    email: user.email,
+    role: roleToLower(user.role),
+  })
+  const newRefreshToken = await generateRefreshToken(user.id)
+  await setAuthCookies(newAccessToken, newRefreshToken)
+
+  const profile = user.profile
   return {
     id: user.id,
     email: user.email,
-    role: user.role as UserRole,
+    role: roleToLower(user.role),
     username: user.username,
-    displayName: user.display_name,
-    avatarUrl: user.avatar_url,
-    isVerified: user.is_verified,
-    onboardingComplete: user.onboarding_complete,
+    displayName: profile?.displayName ?? user.username,
+    avatarUrl: profile?.avatarUrl ?? null,
+    isVerified: profile ? profile.verificationStatus !== "UNVERIFIED" : false,
+    onboardingComplete: !!profile,
   }
 }
 
@@ -132,16 +179,14 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 export async function setAuthCookies(accessToken: string, refreshToken: string): Promise<void> {
   const cookieStore = await cookies()
 
-  // Access token - short lived, httpOnly
   cookieStore.set("access_token", accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 15 * 60, // 15 minutes
+    maxAge: 15 * 60,
     path: "/",
   })
 
-  // Refresh token - long lived, httpOnly
   cookieStore.set("refresh_token", refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -163,16 +208,14 @@ export async function generateUniqueUsername(displayName: string): Promise<strin
   const base = displayName
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "")
-    .slice(0, 15)
+    .slice(0, 15) || "user"
 
   let username = base
   let counter = 1
 
   while (true) {
-    const existing = await sql`
-      SELECT id FROM users WHERE username = ${username}
-    `
-    if (existing.length === 0) break
+    const existing = await prisma.user.findUnique({ where: { username } })
+    if (!existing) break
     username = `${base}${counter}`
     counter++
   }
@@ -184,4 +227,10 @@ export async function getAuthHeader(): Promise<string | null> {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
   return accessToken ? `Bearer ${accessToken}` : null
+}
+
+// For API routes that receive Authorization header (e.g. fetch with credentials)
+export function parseBearerToken(authHeader: string | null): string | null {
+  if (!authHeader?.startsWith("Bearer ")) return null
+  return authHeader.slice(7)
 }

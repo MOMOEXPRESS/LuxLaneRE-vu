@@ -1,61 +1,39 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const filter = searchParams.get("filter") || "top" // top, rising, runway, editorial
-    const limit = Number(searchParams.get("limit")) || 20
+    const filter = searchParams.get("filter") || "top"
+    const limit = Math.min(Number(searchParams.get("limit")) || 20, 50)
 
-    let models
+    const models = await prisma.user.findMany({
+      where: { role: "MODEL" },
+      include: {
+        profile: true,
+        modelProfile: true,
+      },
+      take: limit * 2,
+    })
 
-    if (filter === "rising") {
-      // Models who recently improved score (simplified - by recent activity)
-      models = await db`
-        SELECT u.id, u.display_name, u.avatar_url, u.username, u.is_verified, u.tier,
-               mp.score, mp.rank, mp.experience_tags, mp.height_cm
-        FROM users u
-        JOIN model_profiles mp ON u.id = mp.user_id
-        WHERE u.role = 'model'
-        ORDER BY mp.updated_at DESC, mp.score DESC
-        LIMIT ${limit}
-      `
-    } else if (filter === "runway") {
-      // Models with runway experience
-      models = await db`
-        SELECT u.id, u.display_name, u.avatar_url, u.username, u.is_verified, u.tier,
-               mp.score, mp.rank, mp.experience_tags, mp.height_cm
-        FROM users u
-        JOIN model_profiles mp ON u.id = mp.user_id
-        WHERE u.role = 'model' AND 'runway' = ANY(mp.experience_tags)
-        ORDER BY mp.score DESC
-        LIMIT ${limit}
-      `
-    } else if (filter === "editorial") {
-      // Models with editorial experience
-      models = await db`
-        SELECT u.id, u.display_name, u.avatar_url, u.username, u.is_verified, u.tier,
-               mp.score, mp.rank, mp.experience_tags, mp.height_cm
-        FROM users u
-        JOIN model_profiles mp ON u.id = mp.user_id
-        WHERE u.role = 'model' AND 'editorial' = ANY(mp.experience_tags)
-        ORDER BY mp.score DESC
-        LIMIT ${limit}
-      `
-    } else {
-      // Top models by score
-      models = await db`
-        SELECT u.id, u.display_name, u.avatar_url, u.username, u.is_verified, u.tier,
-               mp.score, mp.rank, mp.experience_tags, mp.height_cm
-        FROM users u
-        JOIN model_profiles mp ON u.id = mp.user_id
-        WHERE u.role = 'model'
-        ORDER BY mp.score DESC NULLS LAST
-        LIMIT ${limit}
-      `
-    }
+    const list = models
+      .filter((u) => u.profile != null)
+      .map((u) => ({
+        id: u.id,
+        displayName: u.profile!.displayName,
+        avatarUrl: u.profile!.avatarUrl,
+        username: u.username,
+        isVerified: u.profile!.verificationStatus !== "UNVERIFIED",
+        score: u.profile!.score ?? u.modelProfile?.luxlaneScore ?? 0,
+        heightCm: u.modelProfile?.heightCm,
+        hair: u.profile!.hair ?? u.modelProfile?.hair,
+        eyes: u.profile!.eyes ?? u.modelProfile?.eyes,
+        experience: u.profile!.experience,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
 
-    return NextResponse.json({ models })
+    return NextResponse.json({ models: list })
   } catch (error) {
     console.error("Get scoreboard error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

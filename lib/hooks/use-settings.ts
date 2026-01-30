@@ -1,9 +1,12 @@
 import useSWR from "swr"
-import { apiClient } from "@/lib/api-client"
+import { api } from "@/lib/api-client"
 
 export interface UserSettings {
   userId: string
   darkMode: boolean
+  pushNotifs?: boolean
+  emailNotifs?: boolean
+  privacyMode?: string
   notifications: {
     email?: boolean
     push?: boolean
@@ -21,7 +24,9 @@ export interface UserSettings {
 }
 
 const fetcher = async () => {
-  return apiClient.get<UserSettings>("/api/settings")
+  const res = await api.getSettings()
+  if (res.error) throw new Error(res.error)
+  return res.data as UserSettings
 }
 
 export function useSettings() {
@@ -30,7 +35,9 @@ export function useSettings() {
   })
 
   const updateSettings = async (settings: Partial<UserSettings>) => {
-    const updated = await apiClient.patch<UserSettings>("/api/settings", settings)
+    const res = await api.updateSettings(settings)
+    if (res.error) throw new Error(res.error)
+    const updated = res.data as UserSettings
     mutate(updated, false)
     return updated
   }

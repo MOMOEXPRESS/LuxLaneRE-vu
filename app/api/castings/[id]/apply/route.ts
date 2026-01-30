@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
-import { v4 as uuidv4 } from "uuid"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -12,55 +11,60 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    if (user.role !== "model") {
-      return NextResponse.json({ error: "Only models can apply to castings" }, { status: 403 })
-    }
+    const casting = await prisma.casting.findUnique({
+      where: { id: castingId },
+      select: { id: true, createdBy: true, title: true, status: true },
+    })
 
-    // Check casting exists and is active
-    const casting = await db`
-      SELECT id, creator_id, title, status FROM castings WHERE id = ${castingId}
-    `
-
-    if (casting.length === 0) {
+    if (!casting) {
       return NextResponse.json({ error: "Casting not found" }, { status: 404 })
     }
 
-    if (casting[0].status !== "active") {
+    if (casting.status !== "ACTIVE") {
       return NextResponse.json({ error: "Casting is not accepting applications" }, { status: 400 })
     }
 
-    // Check if already applied
-    const existing = await db`
-      SELECT id FROM submissions WHERE casting_id = ${castingId} AND model_id = ${user.id}
-    `
+    const existing = await prisma.submission.findUnique({
+      where: { castingId_modelId: { castingId, modelId: user.id } },
+    })
 
-    if (existing.length > 0) {
+    if (existing) {
       return NextResponse.json({ error: "Already applied to this casting" }, { status: 409 })
     }
 
-    const body = await request.json()
-    const { note, portfolioIds } = body
+    const body = await request.json().catch(() => ({}))
+    const note = (body?.note as string) || null
 
-    // Create submission
-    const submissionId = uuidv4()
-    await db`
-      INSERT INTO submissions (id, casting_id, model_id, submitted_by_id, note, portfolio_ids, status)
-      VALUES (${submissionId}, ${castingId}, ${user.id}, ${user.id}, ${note || null}, ${portfolioIds || []}, 'applied')
-    `
+    const submission = await prisma.submission.create({
+      data: {
+        castingId,
+        modelId: user.id,
+        submittedBy: user.id,
+        status: "APPLIED",
+        note,
+      },
+    })
 
-    // Create notification for casting creator
-    await db`
-      INSERT INTO notifications (id, user_id, type, title, body, related_id, related_type)
-      VALUES (
-        ${uuidv4()}, ${casting[0].creator_id}, 'new_application',
-        'New Application', ${`${user.displayName} applied to "${casting[0].title}"`},
-        ${submissionId}, 'submission'
-      )
-    `
+    await prisma.notification.create({
+      data: {
+        userId: casting.createdBy,
+        type: "SYSTEM",
+        payload: {
+          type: "new_application",
+          submissionId: submission.id,
+          castingId,
+          castingTitle: casting.title,
+          modelDisplayName: user.displayName,
+        },
+      },
+    })
 
     return NextResponse.json({
       success: true,
-      submission: { id: submissionId, status: "applied" },
+      submission: {
+        id: submission.id,
+        status: submission.status.toLowerCase(),
+      },
     })
   } catch (error) {
     console.error("Apply to casting error:", error)

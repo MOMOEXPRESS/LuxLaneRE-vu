@@ -15,16 +15,23 @@ export interface User {
   location: string
   followers: number
   following: number
+  isFollowing?: boolean
   createdAt: Date
   // Model-specific
   measurements?: ModelMeasurements
   portfolio?: string[]
   polaroids?: string[]
   availability?: AvailabilitySlot[]
+  availabilityStatus?: "available" | "hold" | "booked"
   experience?: string[]
+  languages?: string[]
+  skinTone?: string
   tags?: string[] // Added tags for matching
   digitalTwin?: DigitalTwin
+  /** Profile posts (from API when viewing another user) */
+  posts?: Array<{ id: string; imageUrl: string; caption?: string | null; createdAt: string; likesCount?: number; commentsCount?: number }>
   metrics?: ModelMetrics
+  agencyId?: string
   // Brand/Agency/Client specific
   companyName?: string
   website?: string
@@ -38,6 +45,7 @@ export interface ModelMeasurements {
   waist: string
   hips: string
   shoeSize: string
+  dressSize?: string
   hairColor: string
   eyeColor: string
   heightCm?: number

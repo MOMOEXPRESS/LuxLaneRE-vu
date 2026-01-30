@@ -6,13 +6,13 @@ import { mockUsers } from "./mock-data"
 import { api } from "./api-client"
 
 // Set to false to use real database APIs
-const USE_MOCK_DATA = true
+const USE_MOCK_DATA = false
 
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (email: string, password: string) => Promise<boolean>
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signup: (data: SignupData) => Promise<boolean>
   logout: () => void
   updateUser: (updates: Partial<User>) => void
@@ -44,8 +44,7 @@ function apiUserToUser(apiUser: Record<string, unknown>): User {
     followers: 0,
     following: 0,
     createdAt: new Date((apiUser.createdAt as string) || (apiUser.created_at as string) || Date.now()),
-    tier: apiUser.tier as string,
-    onboardingComplete: (apiUser.onboardingComplete as boolean) || (apiUser.onboarding_complete as boolean) || false,
+    verificationLevel: ((apiUser.isVerified as boolean) || (apiUser.is_verified as boolean) ? "luxlane_verified" : "unverified") as import("./types").VerificationLevel,
   }
 }
 
@@ -79,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true)
 
     if (USE_MOCK_DATA) {
@@ -89,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (foundUser) {
         setUser(foundUser)
         setIsLoading(false)
-        return true
+        return { success: true }
       }
       // Create mock user if not found
       const newUser: User = {
@@ -108,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setUser(newUser)
       setIsLoading(false)
-      return true
+      return { success: true }
     }
 
     // Real API login
@@ -116,16 +115,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
 
     if (result.error) {
-      console.error("Login error:", result.error)
-      return false
+      return { success: false, error: result.error }
     }
 
     if (result.data?.user) {
       setUser(apiUserToUser(result.data.user))
-      return true
+      return { success: true }
     }
 
-    return false
+    return { success: false, error: "Invalid response from server" }
   }, [])
 
   const signup = useCallback(async (data: SignupData): Promise<boolean> => {
@@ -154,7 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Real API signup
-    const result = await api.signup(data.email, data.password, data.name, data.role)
+    const result = await api.signup(data.email, data.password, data.name, data.role, data.username)
     setIsLoading(false)
 
     if (result.error) {

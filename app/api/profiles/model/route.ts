@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 import { validateBody, updateModelProfileSchema } from "@/lib/validations"
-import { v4 as uuidv4 } from "uuid"
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -11,13 +10,14 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    const userCheck = await db`
-      SELECT role FROM users WHERE id = ${user.id}
-    `
-    if (userCheck.length === 0) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { role: true },
+    })
+    if (!dbUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
-    if (userCheck[0].role !== "model") {
+    if (dbUser.role !== "MODEL") {
       return NextResponse.json({ error: "Only models can update model profile" }, { status: 403 })
     }
 
@@ -26,35 +26,63 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 })
     }
 
-    const { heightCm, bustCm, waistCm, hipsCm, shoeSize, hair, eyes, languages, availability } = validation.data
+    const {
+      heightCm,
+      bustCm,
+      waistCm,
+      hipsCm,
+      shoeSize,
+      hair,
+      eyes,
+      languages,
+      availability,
+      details,
+    } = validation.data
 
-    const existing = await db`
-      SELECT user_id FROM model_profiles WHERE user_id = ${user.id}
-    `
+    const existing = await prisma.modelProfile.findUnique({
+      where: { userId: user.id },
+      select: { details: true },
+    })
 
-    if (existing.length === 0) {
-      // Create new model profile
-      await db`
-        INSERT INTO model_profiles (id, user_id, languages)
-        VALUES (${uuidv4()}, ${user.id}, ${JSON.stringify(languages || [])})
-      `
-    }
+    const currentDetails = (existing?.details as Record<string, unknown> | null) ?? {}
+    const mergedDetails =
+      details != null
+        ? {
+            ...currentDetails,
+            ...(details.dressSize !== undefined && { dressSize: details.dressSize }),
+            ...(details.skinTone !== undefined && { skinTone: details.skinTone }),
+            ...(details.experience !== undefined && { experience: details.experience }),
+          }
+        : undefined
 
-    await db`
-      UPDATE model_profiles SET
-        height_cm = COALESCE(${heightCm}, height_cm),
-        bust_cm = COALESCE(${bustCm}, bust_cm),
-        waist_cm = COALESCE(${waistCm}, waist_cm),
-        hips_cm = COALESCE(${hipsCm}, hips_cm),
-        shoe_size = COALESCE(${shoeSize}, shoe_size),
-        hair_color = COALESCE(${hair}, hair_color),
-        eye_color = COALESCE(${eyes}, eye_color),
-        languages = COALESCE(${languages ? JSON.stringify(languages) : null}, languages),
-        availability = COALESCE(${availability}, availability),
-        updated_at = NOW()
-      WHERE user_id = ${user.id}
-      RETURNING *
-    `
+    await prisma.modelProfile.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        ...(heightCm != null && { heightCm }),
+        ...(bustCm != null && { bustCm }),
+        ...(waistCm != null && { waistCm }),
+        ...(hipsCm != null && { hipsCm }),
+        ...(shoeSize != null && { shoeSize }),
+        ...(hair != null && { hair }),
+        ...(eyes != null && { eyes }),
+        ...(languages != null && { languages }),
+        ...(availability != null && { availability }),
+        ...(mergedDetails != null && { details: mergedDetails }),
+      },
+      update: {
+        ...(heightCm != null && { heightCm }),
+        ...(bustCm != null && { bustCm }),
+        ...(waistCm != null && { waistCm }),
+        ...(hipsCm != null && { hipsCm }),
+        ...(shoeSize != null && { shoeSize }),
+        ...(hair != null && { hair }),
+        ...(eyes != null && { eyes }),
+        ...(languages != null && { languages }),
+        ...(availability != null && { availability }),
+        ...(mergedDetails != null && { details: mergedDetails }),
+      },
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

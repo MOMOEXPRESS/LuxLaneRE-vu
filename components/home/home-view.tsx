@@ -1,62 +1,19 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { ActiveCastings } from "./active-castings"
 import { FeedToggle } from "./feed-toggle"
 import { FeedPost } from "./feed-post"
 import { MyRankCard } from "@/components/scoreboard/my-rank-card"
 import { useAuth } from "@/lib/auth-context"
 import { useStore } from "@/lib/store-context"
+import { usePosts } from "@/lib/hooks/use-posts"
+import { api } from "@/lib/api-client"
 import { getRecommendedCastingsForModel } from "@/lib/ai-matching"
 import { Card } from "@/components/ui/card"
 import { ChevronRight, Sparkles } from "lucide-react"
 import type { Casting, User } from "@/lib/types"
-
-// Mock feed posts
-const mockPosts = [
-  {
-    id: "p1",
-    user: {
-      name: "Sofia Laurent",
-      username: "sofialaurent",
-      avatar: "/professional-model-headshot-woman-brunette.jpg",
-      verified: true,
-    },
-    image: "/high-fashion-editorial-model.jpg",
-    caption: "Behind the scenes from yesterday's Dior shoot. Thank you to the incredible team.",
-    likes: 12453,
-    comments: 234,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4),
-  },
-  {
-    id: "p2",
-    user: {
-      name: "Maison Dior",
-      username: "dior",
-      avatar: "/dior-luxury-fashion-brand-logo-minimal.jpg",
-      verified: true,
-    },
-    image: "/dior-fashion-campaign-spring-aesthetic.jpg",
-    caption: "Spring 2025. A new chapter begins. #DiorSS25",
-    likes: 89234,
-    comments: 1245,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8),
-  },
-  {
-    id: "p3",
-    user: {
-      name: "Isabella Rossi",
-      username: "isabellarossi",
-      avatar: "/professional-model-headshot-woman-italian-dark-hai.jpg",
-      verified: true,
-    },
-    image: "/runway-fashion-week-model.jpg",
-    caption: "Milan Fashion Week finale walk. Dreams do come true.",
-    likes: 8921,
-    comments: 156,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
-  },
-]
 
 interface HomeViewProps {
   onViewCasting: (casting: Casting) => void
@@ -66,9 +23,37 @@ interface HomeViewProps {
 }
 
 export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onViewScoreboard }: HomeViewProps) {
+  const router = useRouter()
   const { user } = useAuth()
   const { castings } = useStore()
+  const { posts: apiPosts, isLoading: postsLoading, refresh: refreshPosts } = usePosts()
   const [feedType, setFeedType] = useState<"foryou" | "following">("foryou")
+
+  const feedPosts = apiPosts.map((p: { id: string; user: { name: string; username: string; avatar: string; verified: boolean }; imageUrl: string; caption: string | null; likes: number; comments: number; likedByMe: boolean; savedByMe: boolean; createdAt: string }) => ({
+    id: p.id,
+    user: p.user,
+    image: p.imageUrl,
+    caption: p.caption ?? "",
+    likes: p.likes,
+    comments: p.comments,
+    likedByMe: p.likedByMe,
+    savedByMe: p.savedByMe,
+    createdAt: new Date(p.createdAt),
+  }))
+
+  const handleLike = async (postId: string, currentlyLiked: boolean) => {
+    const res = currentlyLiked ? await api.unlikePost(postId) : await api.likePost(postId)
+    if (!res.error) refreshPosts()
+  }
+
+  const handleSave = async (postId: string, currentlySaved: boolean) => {
+    const res = currentlySaved ? await api.unsavePost(postId) : await api.savePost(postId)
+    if (!res.error) refreshPosts()
+  }
+
+  const handleUserClick = (username: string) => {
+    router.push("/u/" + username)
+  }
 
   const isModel = user?.role === "model"
 
@@ -144,9 +129,22 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
 
       {/* Feed Posts */}
       <div>
-        {mockPosts.map((post) => (
-          <FeedPost key={post.id} post={post} />
-        ))}
+        {postsLoading ? (
+          <div className="py-12 text-center text-muted-foreground text-sm">Loading feed…</div>
+        ) : feedPosts.length > 0 ? (
+          feedPosts.map((post) => (
+            <FeedPost
+              key={post.id}
+              post={post}
+              onUserClick={() => handleUserClick(post.user.username)}
+              onLike={() => handleLike(post.id, post.likedByMe)}
+              onSave={() => handleSave(post.id, post.savedByMe)}
+              refreshFeed={refreshPosts}
+            />
+          ))
+        ) : (
+          <div className="py-12 text-center text-muted-foreground text-sm">No posts yet.</div>
+        )}
       </div>
     </div>
   )

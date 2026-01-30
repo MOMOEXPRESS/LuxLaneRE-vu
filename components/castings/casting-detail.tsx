@@ -1,17 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Card } from "@/components/ui/card"
-import type { Casting, User, CastingApplication } from "@/lib/types"
+import type { Casting, User, CastingApplication, ModelMatch } from "@/lib/types"
 import { useAuth } from "@/lib/auth-context"
 import { useStore } from "@/lib/store-context"
 import { mockUsers, getUserLimits } from "@/lib/mock-data"
-import { getTopMatchesForCasting } from "@/lib/ai-matching"
 import { FitScorePanel } from "@/components/ai/fit-score-panel"
 import {
   ArrowLeft,
@@ -27,7 +27,10 @@ import {
   Scan,
   MessageSquare,
   AlertCircle,
+  Bookmark,
+  Share2,
 } from "lucide-react"
+import { api } from "@/lib/api-client"
 import { format, formatDistanceToNow } from "date-fns"
 
 interface CastingDetailProps {
@@ -35,10 +38,12 @@ interface CastingDetailProps {
   onBack: () => void
   onApply?: () => void
   onViewProfile?: (user: User) => void
+  onViewCasting?: (casting: Casting) => void
   onOpenRoom?: () => void
 }
 
-export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenRoom }: CastingDetailProps) {
+export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewCasting, onOpenRoom }: CastingDetailProps) {
+  const router = useRouter()
   const { user } = useAuth()
   const { getActiveCastings, getApplicationsForModel, getApplicationsForCasting, addApplication, addNotification } =
     useStore()
@@ -47,6 +52,13 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
   const [applicationMessage, setApplicationMessage] = useState("")
   const [selectedPortfolio, setSelectedPortfolio] = useState<string[]>([])
   const [showAiMatches, setShowAiMatches] = useState(false)
+  const [submissionStatus, setSubmissionStatus] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  const [applyLoading, setApplyLoading] = useState(false)
+  const [savedLoading, setSavedLoading] = useState(false)
+  const [aiMatchesFromApi, setAiMatchesFromApi] = useState<ModelMatch[]>([])
+  const [aiMatchesLoading, setAiMatchesLoading] = useState(false)
+  const [invitingId, setInvitingId] = useState<string | null>(null)
 
   const isModel = user?.role === "model"
   const isAgency = user?.role === "agency"
@@ -56,7 +68,46 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
 
   const userApplications = user ? getApplicationsForModel(user.id) : []
   const existingApplication = userApplications.find((a) => a.castingId === casting.id)
-  const hasApplied = !!existingApplication
+  const hasApplied = submissionStatus !== null || !!existingApplication
+  const appliedStatus = submissionStatus || existingApplication?.status
+
+  const fetchSubmissionAndSaved = useCallback(async () => {
+    if (!user) return
+    const [subRes, savedRes] = await Promise.all([
+      api.getCastingSubmission(casting.id),
+      api.getCastingSaved(casting.id),
+    ])
+    if (subRes.data?.submission) setSubmissionStatus(subRes.data.submission.status)
+    if (savedRes.data?.saved !== undefined) setSaved(savedRes.data.saved)
+  }, [casting.id, user])
+
+  useEffect(() => {
+    fetchSubmissionAndSaved()
+  }, [fetchSubmissionAndSaved])
+
+  const handleShare = () => {
+    const url = typeof window !== "undefined" ? `${window.location.origin}/castings/${casting.id}` : ""
+    if (navigator.share) {
+      navigator.share({ title: casting.title, url }).catch(() => {
+        navigator.clipboard?.writeText(url)
+      })
+    } else {
+      navigator.clipboard?.writeText(url)
+    }
+  }
+
+  const handleBookmark = async () => {
+    if (savedLoading || !user) return
+    setSavedLoading(true)
+    if (saved) {
+      await api.unsaveCasting(casting.id)
+      setSaved(false)
+    } else {
+      await api.saveCasting(casting.id)
+      setSaved(true)
+    }
+    setSavedLoading(false)
+  }
 
   const typeLabels: Record<string, string> = {
     runway: "Runway",
@@ -67,7 +118,7 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
     fitting: "Fitting",
   }
 
-  const aiMatches = isBrand || isAgency || isCreator ? getTopMatchesForCasting(casting, 5) : []
+  const aiMatches = isBrand || isAgency || isCreator ? aiMatchesFromApi : []
 
   const userLimits = user ? getUserLimits(user.id) : null
   const weeklyLimitReached = userLimits && userLimits.weeklyApplications >= userLimits.weeklyApplicationsMax
@@ -87,13 +138,19 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
   const hasDigitalTwin = user?.digitalTwin?.status === "complete"
   const meetsDigitalTwinReq = !requiresDigitalTwin || hasDigitalTwin
 
-  const handleApply = () => {
+  const handleApply = async () => {
     if (!user) return
-
-    const newApplication: CastingApplication = {
-      id: `app-${Date.now()}`,
+    setApplyLoading(true)
+    const res = await api.applyToCasting(casting.id, { note: applicationMessage })
+    setApplyLoading(false)
+    if (res.error) {
+      return
+    }
+    setSubmissionStatus("applied")
+    addApplication({
+      id: res.data?.submission?.id ?? `app-${Date.now()}`,
       castingId: casting.id,
-      casting: casting,
+      casting,
       modelId: user.id,
       model: user,
       status: "pending",
@@ -101,11 +158,7 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
       portfolioSelection: selectedPortfolio,
       submittedAt: new Date(),
       updatedAt: new Date(),
-    }
-
-    addApplication(newApplication)
-
-    // Create notification for casting creator
+    })
     addNotification({
       id: `notif-${Date.now()}`,
       userId: casting.creatorId,
@@ -117,7 +170,6 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
       metadata: { castingId: casting.id },
       createdAt: new Date(),
     })
-
     setShowApplySheet(false)
     setApplyStep(1)
     setApplicationMessage("")
@@ -192,19 +244,27 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
           <div className="space-y-2">
             <Button className="w-full h-12" size="lg" disabled>
               <Check className="w-4 h-4 mr-2" />
-              Applied
-              {existingApplication && (
+              {appliedStatus === "shortlisted"
+                ? "Shortlisted"
+                : appliedStatus === "offered" || appliedStatus === "accepted"
+                  ? "Accepted"
+                  : appliedStatus === "rejected"
+                    ? "Rejected"
+                    : "Applied"}
+              {appliedStatus && appliedStatus !== "applied" && (
                 <Badge
                   variant="outline"
-                  className={`ml-2 ${
-                    existingApplication.status === "shortlisted"
-                      ? "bg-warning/10 text-warning"
-                      : existingApplication.status === "accepted"
-                        ? "bg-success/10 text-success"
-                        : ""
+                  className={`ml-2 capitalize ${
+                    appliedStatus === "shortlisted"
+                      ? "bg-amber-500/10 text-amber-600"
+                      : appliedStatus === "accepted" || appliedStatus === "offered"
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : appliedStatus === "rejected"
+                          ? "bg-red-500/10 text-red-600"
+                          : ""
                   }`}
                 >
-                  {existingApplication.status}
+                  {appliedStatus}
                 </Badge>
               )}
             </Button>
@@ -258,9 +318,9 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
             className="w-full h-12"
             size="lg"
             onClick={() => setShowApplySheet(true)}
-            disabled={casting.status !== "active"}
+            disabled={casting.status !== "active" || applyLoading}
           >
-            Apply Now
+            {applyLoading ? "Applying…" : "Apply Now"}
           </Button>
           {userLimits && (
             <p className="text-xs text-center text-muted-foreground">
@@ -300,23 +360,52 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
             alt={casting.title}
             className="w-full h-full object-cover"
           />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 left-4 bg-background/80 backdrop-blur-sm"
-            onClick={onBack}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
+          <div className="absolute top-4 left-0 right-0 flex items-center justify-between px-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="bg-background/80 backdrop-blur-sm"
+              onClick={onBack}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`bg-background/80 backdrop-blur-sm ${saved ? "text-foreground" : ""}`}
+                onClick={handleBookmark}
+                disabled={savedLoading}
+              >
+                <Bookmark className={`w-5 h-5 ${saved ? "fill-current" : ""}`} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-background/80 backdrop-blur-sm"
+                onClick={handleShare}
+              >
+                <Share2 className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
       {!casting.images?.[0] && (
-        <div className="p-4 border-b border-border">
+        <div className="p-4 border-b border-border flex items-center justify-between">
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
+          <div className="flex gap-1">
+            <Button variant="ghost" size="icon" className={saved ? "text-foreground" : ""} onClick={handleBookmark} disabled={savedLoading}>
+              <Bookmark className={`w-5 h-5 ${saved ? "fill-current" : ""}`} />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleShare}>
+              <Share2 className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
       )}
 
@@ -350,6 +439,18 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
             {casting.creator.verified && <BadgeCheck className="w-4 h-4" />}
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </button>
+
+          {isModel && user && (
+            <div className="mt-3 p-3 rounded-lg bg-muted/50">
+              <p className="text-xs text-muted-foreground mb-1">Your fit</p>
+              <p className="text-2xl font-bold">
+                {(() => {
+                  const fit = calculateFitScore(user, casting)
+                  return `${fit.total}%`
+                })()}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Key Details */}
@@ -461,12 +562,20 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
           <span>{casting.shortlistedCount} shortlisted</span>
         </div>
 
-        {(isBrand || isAgency || isCreator) && aiMatches.length > 0 && (
+        {(isBrand || isAgency || isCreator) && aiMatchesLoading && (
+          <p className="text-sm text-muted-foreground py-4">Loading AI matches…</p>
+        )}
+        {(isBrand || isAgency || isCreator) && !aiMatchesLoading && aiMatches.length > 0 && (
           <FitScorePanel
             matches={aiMatches}
             onViewProfile={(u) => onViewProfile?.(u)}
-            onInvite={(u) => {
-              // Mock invite action
+            onInvite={async (u) => {
+              if (invitingId || !u?.id) return
+              setInvitingId(u.id)
+              const res = await api.inviteModelToCasting(casting.id, u.id)
+              setInvitingId(null)
+              if (res.error) return
+              setAiMatchesFromApi((prev) => prev.filter((m) => m.model.id !== u.id))
             }}
             title="AI Top Matches"
           />
@@ -478,7 +587,11 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onOpenR
             <h3 className="font-semibold mb-3">Similar Castings</h3>
             <div className="space-y-2">
               {similarCastings.map((c) => (
-                <Card key={c.id} className="p-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                <Card
+                  key={c.id}
+                  className="p-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                  onClick={() => onViewCasting?.(c)}
+                >
                   <div className="flex items-center gap-3">
                     <Avatar className="w-10 h-10">
                       <AvatarImage src={c.creator.avatar || "/placeholder.svg"} alt={c.creator.name} />

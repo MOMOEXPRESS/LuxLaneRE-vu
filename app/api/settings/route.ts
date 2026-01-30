@@ -1,36 +1,45 @@
 import { NextResponse } from "next/server"
-import { db } from "@/lib/db"
-import { verifyAccessToken, getAuthHeader } from "@/lib/auth"
+import { cookies } from "next/headers"
+import { prisma } from "@/lib/prisma"
+import { verifyAccessToken } from "@/lib/auth"
 import { validateBody, updateSettingsSchema } from "@/lib/validations"
 
-export async function GET(request: Request) {
-  const token = getAuthHeader(request)
-  if (!token) {
+async function getUserId(): Promise<string | null> {
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get("access_token")?.value
+  if (!accessToken) return null
+  const payload = await verifyAccessToken(accessToken)
+  return payload?.userId ?? null
+}
+
+export async function GET() {
+  const userId = await getUserId()
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const payload = verifyAccessToken(token)
-  if (!payload) {
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-  }
-
   try {
-    // Upsert to ensure settings always exist (matches NestJS pattern)
-    const result = await db`
-      INSERT INTO user_settings (user_id, dark_mode, notifications, privacy)
-      VALUES (${payload.userId}, true, '{}'::jsonb, '{}'::jsonb)
-      ON CONFLICT (user_id) DO UPDATE SET user_id = user_settings.user_id
-      RETURNING user_id, dark_mode, notifications, privacy, created_at, updated_at
-    `
-
-    const settings = result[0]
+    let settings = await prisma.userSettings.findUnique({
+      where: { userId },
+    })
+    if (!settings) {
+      settings = await prisma.userSettings.create({
+        data: { userId },
+      })
+    }
     return NextResponse.json({
-      userId: settings.user_id,
-      darkMode: settings.dark_mode,
-      notifications: settings.notifications,
-      privacy: settings.privacy,
-      createdAt: settings.created_at,
-      updatedAt: settings.updated_at,
+      userId: settings.userId,
+      darkMode: settings.darkMode,
+      pushNotifs: settings.pushNotifs,
+      emailNotifs: settings.emailNotifs,
+      privacyMode: settings.privacyMode,
+      notifications: {
+        push: settings.pushNotifs,
+        email: settings.emailNotifs,
+      },
+      privacy: { profileVisibility: settings.privacyMode },
+      createdAt: settings.createdAt.toISOString(),
+      updatedAt: settings.updatedAt.toISOString(),
     })
   } catch (error) {
     console.error("Failed to get settings:", error)
@@ -39,14 +48,9 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const token = getAuthHeader(request)
-  if (!token) {
+  const userId = await getUserId()
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const payload = verifyAccessToken(token)
-  if (!payload) {
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 })
   }
 
   const validation = await validateBody(request, updateSettingsSchema)
@@ -54,43 +58,42 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: validation.error }, { status: 400 })
   }
 
-  const { darkMode, notifications, privacy } = validation.data
+  const { darkMode, pushNotifs, emailNotifs, privacyMode, notifications, privacy } = validation.data
+
+  const pushNotifsVal = pushNotifs ?? notifications?.push
+  const emailNotifsVal = emailNotifs ?? notifications?.email
+  const privacyModeVal = privacyMode ?? privacy?.profileVisibility
 
   try {
-    // Build dynamic update matching NestJS conditional spread pattern
-    const result = await db`
-      INSERT INTO user_settings (user_id, dark_mode, notifications, privacy)
-      VALUES (
-        ${payload.userId},
-        ${darkMode ?? true},
-        ${JSON.stringify(notifications ?? {})}::jsonb,
-        ${JSON.stringify(privacy ?? {})}::jsonb
-      )
-      ON CONFLICT (user_id) DO UPDATE SET
-        dark_mode = CASE 
-          WHEN ${darkMode !== undefined} THEN ${darkMode ?? true}
-          ELSE user_settings.dark_mode 
-        END,
-        notifications = CASE 
-          WHEN ${notifications !== undefined} THEN ${JSON.stringify(notifications ?? {})}::jsonb
-          ELSE user_settings.notifications 
-        END,
-        privacy = CASE 
-          WHEN ${privacy !== undefined} THEN ${JSON.stringify(privacy ?? {})}::jsonb
-          ELSE user_settings.privacy 
-        END,
-        updated_at = NOW()
-      RETURNING user_id, dark_mode, notifications, privacy, created_at, updated_at
-    `
-
-    const settings = result[0]
+    const settings = await prisma.userSettings.upsert({
+      where: { userId },
+      create: {
+        userId,
+        darkMode: darkMode ?? true,
+        pushNotifs: pushNotifsVal ?? true,
+        emailNotifs: emailNotifsVal ?? true,
+        privacyMode: privacyModeVal ?? "public",
+      },
+      update: {
+        ...(darkMode !== undefined && { darkMode }),
+        ...(pushNotifsVal !== undefined && { pushNotifs: pushNotifsVal }),
+        ...(emailNotifsVal !== undefined && { emailNotifs: emailNotifsVal }),
+        ...(privacyModeVal !== undefined && { privacyMode: privacyModeVal }),
+      },
+    })
     return NextResponse.json({
-      userId: settings.user_id,
-      darkMode: settings.dark_mode,
-      notifications: settings.notifications,
-      privacy: settings.privacy,
-      createdAt: settings.created_at,
-      updatedAt: settings.updated_at,
+      userId: settings.userId,
+      darkMode: settings.darkMode,
+      pushNotifs: settings.pushNotifs,
+      emailNotifs: settings.emailNotifs,
+      privacyMode: settings.privacyMode,
+      notifications: {
+        push: settings.pushNotifs,
+        email: settings.emailNotifs,
+      },
+      privacy: { profileVisibility: settings.privacyMode },
+      createdAt: settings.createdAt.toISOString(),
+      updatedAt: settings.updatedAt.toISOString(),
     })
   } catch (error) {
     console.error("Failed to update settings:", error)
