@@ -38,8 +38,14 @@ interface ApiResponse<T> {
 
 async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: "Request failed" }))
-    return { error: errorData.error || `Error: ${response.status}` }
+    try {
+      const errorData = await response.json()
+      console.log("[v0] API error response:", response.status, errorData)
+      return { error: errorData.error || `Error: ${response.status}` }
+    } catch {
+      console.log("[v0] API error (no JSON):", response.status, response.statusText)
+      return { error: `Request failed: ${response.status} ${response.statusText}` }
+    }
   }
   const data = await response.json()
   return { data }

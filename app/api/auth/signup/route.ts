@@ -9,14 +9,16 @@ import {
 } from "@/lib/auth"
 import { Role } from "@prisma/client"
 
-const VALID_ROLES: Role[] = [Role.MODEL, Role.AGENCY, Role.BRAND]
+const VALID_ROLES: Role[] = [Role.MODEL, Role.AGENCY, Role.BRAND, Role.CLIENT]
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    console.log("[v0] Signup request body:", { ...body, password: "***" })
     const { email, password, displayName, role: roleInput, username: usernameInput } = body
 
     if (!email || !password || !displayName || !roleInput) {
+      console.log("[v0] Missing required fields:", { email: !!email, password: !!password, displayName: !!displayName, roleInput: !!roleInput })
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
@@ -54,10 +56,12 @@ export async function POST(request: NextRequest) {
         email: normalizedEmail,
         username,
         passwordHash,
+        displayName,
         role,
       },
     })
 
+    // Create profile record
     await prisma.profile.create({
       data: {
         userId: user.id,
@@ -102,8 +106,9 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Signup error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[v0] Signup error:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ error: `Internal server error: ${errorMessage}` }, { status: 500 })
   }
 }
 

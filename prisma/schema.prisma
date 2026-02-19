@@ -78,12 +78,18 @@ enum TwinStatus {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  username     String   @unique
-  passwordHash String
-  role         Role
-  createdAt    DateTime @default(now())
+  id              String    @id @default(uuid())
+  email           String    @unique
+  username        String    @unique
+  passwordHash    String    @map("password_hash")
+  displayName     String    @map("display_name")
+  role            Role
+  bio             String?
+  locationCity    String?   @map("location_city")
+  avatarUrl       String?   @map("avatar_url")
+  onboardingComplete Boolean? @default(false) @map("onboarding_complete")
+  createdAt       DateTime? @default(now()) @map("created_at")
+  updatedAt       DateTime? @updatedAt @map("updated_at")
 
   profile             Profile?
   modelProfile        ModelProfile?
@@ -109,19 +115,19 @@ model User {
 }
 
 model Profile {
-  userId             String   @id
-  displayName        String
+  userId             String            @id @map("user_id")
+  displayName        String            @map("display_name")
   bio                String?
   location           String?
   height             String?
   hair               String?
   eyes               String?
   experience         String?
-  verificationStatus VerificationLevel @default(UNVERIFIED)
-  score              Int      @default(0)
-  avatarUrl          String?
-  coverUrl           String?
-  updatedAt          DateTime @updatedAt
+  verificationStatus VerificationLevel @default(UNVERIFIED) @map("verification_status")
+  score              Int               @default(0)
+  avatarUrl          String?           @map("avatar_url")
+  coverUrl           String?           @map("cover_url")
+  updatedAt          DateTime?         @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
