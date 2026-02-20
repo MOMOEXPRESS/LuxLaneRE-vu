@@ -136,11 +136,11 @@ model Profile {
 
 model RefreshToken {
   id        String   @id @default(uuid())
-  userId    String
-  tokenHash String
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
   revoked   Boolean  @default(false)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -149,20 +149,19 @@ model RefreshToken {
 }
 
 model ModelProfile {
-  userId            String             @id
-  heightCm          Int?
-  bustCm            Int?
-  waistCm           Int?
-  hipsCm            Int?
-  shoeSize          String?
+  userId            String             @id @map("user_id")
+  heightCm          Int?               @map("height_cm")
+  bustCm            Int?               @map("bust_cm")
+  waistCm           Int?               @map("waist_cm")
+  hipsCm            Int?               @map("hips_cm")
+  shoeSize          String?            @map("shoe_size")
   hair              String?
   eyes              String?
   languages         String[]
   availability      AvailabilityStatus @default(AVAILABLE)
-  agencyId          String?
-  verificationLevel VerificationLevel  @default(UNVERIFIED)
-  luxlaneScore      Int                @default(0)
-  details           Json?              // extended: dressSize, inseam, experience tags, etc.
+  agencyId          String?            @map("agency_id")
+  verificationLevel VerificationLevel  @default(UNVERIFIED) @map("verification_level")
+  luxlaneScore      Int                @default(0) @map("luxlane_score")
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   digitalTwin DigitalTwin?
@@ -171,8 +170,8 @@ model ModelProfile {
 }
 
 model AgencyProfile {
-  userId     String  @id
-  agencyName String
+  userId     String  @id @map("user_id")
+  agencyName String  @map("agency_name")
   website    String?
   verified   Boolean @default(false)
 
@@ -182,8 +181,8 @@ model AgencyProfile {
 }
 
 model BrandProfile {
-  userId    String  @id
-  brandName String
+  userId    String  @id @map("user_id")
+  brandName String  @map("brand_name")
   website   String?
   verified  Boolean @default(false)
 
@@ -193,9 +192,9 @@ model BrandProfile {
 }
 
 model Follow {
-  followerId  String
-  followingId String
-  createdAt   DateTime @default(now())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   follower  User @relation("following", fields: [followerId], references: [id], onDelete: Cascade)
   following User @relation("followers", fields: [followingId], references: [id], onDelete: Cascade)
@@ -207,21 +206,21 @@ model Follow {
 
 model Casting {
   id          String        @id @default(uuid())
-  createdBy   String
+  createdBy   String        @map("created_by")
   title       String
   type        CastingType
   description String?
   location    String?
-  startDate   DateTime?
-  endDate     DateTime?
-  payMin      Int?
-  payMax      Int?
+  startDate   DateTime?     @map("start_date")
+  endDate     DateTime?     @map("end_date")
+  payMin      Int?          @map("pay_min")
+  payMax      Int?          @map("pay_max")
   deadline    DateTime?
   status      CastingStatus @default(DRAFT)
 
-  verifiedOnly            Boolean @default(false)
-  requireDigitalTwin      Boolean @default(false)
-  maxSubmissionsPerAgency Int?
+  verifiedOnly            Boolean @default(false) @map("verified_only")
+  requireDigitalTwin      Boolean @default(false) @map("require_digital_twin")
+  maxSubmissionsPerAgency Int?    @map("max_submissions_per_agency")
 
   requirements   CastingRequirement?
   submissions    Submission[]
@@ -229,8 +228,8 @@ model Casting {
   rooms          Conversation[] @relation("castingRooms")
   creator        User           @relation("createdCastings", fields: [createdBy], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status])
   @@index([createdBy])
@@ -238,9 +237,9 @@ model Casting {
 }
 
 model SavedCasting {
-  userId    String
-  castingId String
-  createdAt DateTime @default(now())
+  userId    String   @map("user_id")
+  castingId String   @map("casting_id")
+  createdAt DateTime @default(now()) @map("created_at")
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   casting Casting @relation(fields: [castingId], references: [id], onDelete: Cascade)
@@ -251,9 +250,9 @@ model SavedCasting {
 }
 
 model CastingRequirement {
-  castingId   String   @id
-  minHeightCm Int?
-  maxHeightCm Int?
+  castingId   String   @id @map("casting_id")
+  minHeightCm Int?     @map("min_height_cm")
+  maxHeightCm Int?     @map("max_height_cm")
   tags        String[]
   notes       String?
 
@@ -264,17 +263,17 @@ model CastingRequirement {
 
 model Submission {
   id          String           @id @default(uuid())
-  castingId   String
-  modelId     String
-  submittedBy String
+  castingId   String           @map("casting_id")
+  modelId     String           @map("model_id")
+  submittedBy String           @map("submitted_by")
   status      SubmissionStatus @default(APPLIED)
   note        String?
 
   casting Casting @relation(fields: [castingId], references: [id], onDelete: Cascade)
   model   User    @relation("modelSubmissions", fields: [modelId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([castingId, modelId])
   @@index([castingId, status])
@@ -285,8 +284,8 @@ model Submission {
 model Conversation {
   id        String   @id @default(uuid())
   type      String // "direct" | "casting_room"
-  castingId String?
-  createdAt DateTime @default(now())
+  castingId String?  @map("casting_id")
+  createdAt DateTime @default(now()) @map("created_at")
 
   members  ConversationMember[]
   messages Message[]
@@ -296,9 +295,9 @@ model Conversation {
 }
 
 model ConversationMember {
-  conversationId String
-  userId         String
-  joinedAt       DateTime @default(now())
+  conversationId String   @map("conversation_id")
+  userId         String   @map("user_id")
+  joinedAt       DateTime @default(now()) @map("joined_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -310,11 +309,11 @@ model ConversationMember {
 
 model Message {
   id             String   @id @default(uuid())
-  conversationId String
-  senderId       String
+  conversationId String   @map("conversation_id")
+  senderId       String   @map("sender_id")
   body           String
-  attachmentUrl  String?
-  createdAt      DateTime @default(now())
+  attachmentUrl  String?  @map("attachment_url")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User         @relation("sentMessages", fields: [senderId], references: [id], onDelete: Cascade)
@@ -325,11 +324,11 @@ model Message {
 
 model Notification {
   id        String           @id @default(uuid())
-  userId    String
+  userId    String           @map("user_id")
   type      NotificationType
   payload   Json
   read      Boolean          @default(false)
-  createdAt DateTime         @default(now())
+  createdAt DateTime         @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -339,11 +338,11 @@ model Notification {
 
 model MediaAsset {
   id        String    @id @default(uuid())
-  ownerId   String
+  ownerId   String    @map("owner_id")
   type      MediaType
   url       String
   meta      Json?
-  createdAt DateTime  @default(now())
+  createdAt DateTime  @default(now()) @map("created_at")
 
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
@@ -352,12 +351,11 @@ model MediaAsset {
 }
 
 model DigitalTwin {
-  userId     String     @id
+  userId     String     @id @map("user_id")
   status     TwinStatus @default(NONE)
   summary    Json?
-  previewUrl String?
-  modelUrl   String?    // .glb / .usdz for 3D viewer
-  updatedAt  DateTime   @updatedAt
+  previewUrl String?    @map("preview_url")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
 
   user ModelProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
@@ -365,13 +363,12 @@ model DigitalTwin {
 }
 
 model UserSettings {
-  userId       String   @id
-  pushNotifs   Boolean  @default(true)
-  emailNotifs  Boolean  @default(true)
-  darkMode     Boolean  @default(true)
-  privacyMode  String   @default("public")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  userId        String   @id @map("user_id")
+  notifications Json?    @default("{\"push\": true, \"email\": true}")
+  darkMode      Boolean  @default(true) @map("dark_mode")
+  privacy       Json?    @default("{\"mode\": \"public\"}")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -380,10 +377,10 @@ model UserSettings {
 
 model Post {
   id        String   @id @default(uuid())
-  userId    String
-  imageUrl  String
+  userId    String   @map("user_id")
+  imageUrl  String   @map("image_url")
   caption   String?
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   likes    PostLike[]
@@ -395,9 +392,9 @@ model Post {
 }
 
 model PostLike {
-  userId String
-  postId String
-  createdAt DateTime @default(now())
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
@@ -408,9 +405,9 @@ model PostLike {
 }
 
 model PostSave {
-  userId   String
-  postId   String
-  createdAt DateTime @default(now())
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
@@ -422,10 +419,10 @@ model PostSave {
 
 model Comment {
   id        String   @id @default(uuid())
-  postId    String
-  userId    String
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
   body      String
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

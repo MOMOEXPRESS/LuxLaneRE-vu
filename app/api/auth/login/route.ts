@@ -86,8 +86,7 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[v0] Login error:", error instanceof Error ? error.message : error)
-    console.error("[v0] Login error stack:", error instanceof Error ? error.stack : "no stack")
-    return NextResponse.json({ error: `Internal server error: ${error instanceof Error ? error.message : "unknown"}` }, { status: 500 })
+    console.error("Login error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
