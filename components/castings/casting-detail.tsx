@@ -189,6 +189,19 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
     setSelectedPortfolio([])
   }
 
+  // Application status display
+  const getStatusDisplay = (status: string) => {
+    switch (status) {
+      case "pending": return { label: "Application Sent", color: "text-blue-400", bgColor: "bg-blue-500/10 border-blue-500/20" }
+      case "applied": return { label: "Application Sent", color: "text-blue-400", bgColor: "bg-blue-500/10 border-blue-500/20" }
+      case "under_review": return { label: "Under Review", color: "text-amber-400", bgColor: "bg-amber-500/10 border-amber-500/20" }
+      case "shortlisted": return { label: "Shortlisted", color: "text-emerald-400", bgColor: "bg-emerald-500/10 border-emerald-500/20" }
+      case "accepted": return { label: "Accepted", color: "text-green-400", bgColor: "bg-green-500/10 border-green-500/20" }
+      case "rejected": return { label: "Not Selected", color: "text-red-400", bgColor: "bg-red-500/10 border-red-500/20" }
+      default: return { label: status, color: "text-muted-foreground", bgColor: "bg-muted" }
+    }
+  }
+
   const [selectedModels, setSelectedModels] = useState<string[]>([])
 
   const handleAgencySubmit = () => {
@@ -305,34 +318,28 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
 
     if (isModel) {
       if (hasApplied) {
+        const statusInfo = getStatusDisplay(appliedStatus || "applied")
         return (
           <div className="space-y-2">
-            <Button className="w-full h-12" size="lg" disabled>
-              <Check className="w-4 h-4 mr-2" />
-              {appliedStatus === "shortlisted"
-                ? "Shortlisted"
-                : appliedStatus === "offered" || appliedStatus === "accepted"
-                  ? "Accepted"
-                  : appliedStatus === "rejected"
-                    ? "Rejected"
-                    : "Applied"}
-              {appliedStatus && appliedStatus !== "applied" && (
-                <Badge
-                  variant="outline"
-                  className={`ml-2 capitalize ${
-                    appliedStatus === "shortlisted"
-                      ? "bg-amber-500/10 text-amber-600"
-                      : appliedStatus === "accepted" || appliedStatus === "offered"
-                        ? "bg-emerald-500/10 text-emerald-600"
-                        : appliedStatus === "rejected"
-                          ? "bg-red-500/10 text-red-600"
-                          : ""
-                  }`}
-                >
-                  {appliedStatus}
-                </Badge>
-              )}
-            </Button>
+            <Card className={`p-4 border ${statusInfo.bgColor}`}>
+              <div className="flex items-center gap-3">
+                <Check className={`w-5 h-5 ${statusInfo.color}`} />
+                <div className="flex-1">
+                  <p className={`font-medium ${statusInfo.color}`}>{statusInfo.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {appliedStatus === "pending" || appliedStatus === "applied"
+                      ? "The casting director will review your application."
+                      : appliedStatus === "shortlisted"
+                        ? "You've been shortlisted! Stay tuned for next steps."
+                        : appliedStatus === "accepted"
+                          ? "Congratulations! Check your inbox for details."
+                          : appliedStatus === "rejected"
+                            ? "This casting wasn't a match. Keep applying!"
+                            : "Your application is being processed."}
+                  </p>
+                </div>
+              </div>
+            </Card>
           </div>
         )
       }
@@ -769,89 +776,236 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
       {/* Apply Sheet - Model */}
       {isModel && (
         <Sheet open={showApplySheet} onOpenChange={setShowApplySheet}>
-          <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl">
+          <SheetContent side="bottom" className="h-[90vh] rounded-t-2xl overflow-y-auto">
             <SheetHeader>
-              <SheetTitle>Apply to {casting.title}</SheetTitle>
+              <SheetTitle>
+                {applyStep === 1 && "Review Your Profile"}
+                {applyStep === 2 && "Select Portfolio"}
+                {applyStep === 3 && "Confirm Availability"}
+                {applyStep === 4 && "Submit Application"}
+              </SheetTitle>
             </SheetHeader>
-            <div className="mt-6 space-y-6">
+
+            {/* Step indicators */}
+            <div className="flex gap-1 mt-4 mb-6">
+              {[1, 2, 3, 4].map((s) => (
+                <div
+                  key={s}
+                  className={`flex-1 h-1 rounded-full transition-colors ${
+                    s <= applyStep ? "bg-foreground" : "bg-muted"
+                  }`}
+                />
+              ))}
+            </div>
+
+            <div className="space-y-6">
+              {/* Step 1: Profile Review */}
               {applyStep === 1 && (
                 <>
-                  <div>
-                    <h4 className="font-medium mb-3">Select Portfolio Images</h4>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(user?.portfolio || []).map((img, i) => (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            if (selectedPortfolio.includes(img)) {
-                              setSelectedPortfolio((prev) => prev.filter((p) => p !== img))
-                            } else {
-                              setSelectedPortfolio((prev) => [...prev, img])
-                            }
-                          }}
-                          className={`aspect-square rounded-lg overflow-hidden border-2 transition-colors ${
-                            selectedPortfolio.includes(img) ? "border-foreground" : "border-transparent"
-                          }`}
-                        >
-                          <img
-                            src={img || "/placeholder.svg"}
-                            alt={`Portfolio ${i + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      ))}
+                  <p className="text-sm text-muted-foreground">
+                    This info will be sent with your application. Make sure it's up to date.
+                  </p>
+
+                  <Card className="p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="w-14 h-14">
+                        <AvatarImage src={user?.avatar || "/placeholder.svg"} />
+                        <AvatarFallback>{user?.name?.[0]}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-semibold">{user?.name}</p>
+                        <p className="text-sm text-muted-foreground">@{user?.username}</p>
+                      </div>
                     </div>
-                  </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Location</p>
+                        <p className="text-sm font-medium">{user?.location || "Not set"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Height</p>
+                        <p className="text-sm font-medium">{user?.height || "Not set"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Hair</p>
+                        <p className="text-sm font-medium">{user?.hair || "Not set"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Eyes</p>
+                        <p className="text-sm font-medium">{user?.eyes || "Not set"}</p>
+                      </div>
+                    </div>
+
+                    {user?.bio && (
+                      <div className="pt-2 border-t border-border">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Bio</p>
+                        <p className="text-sm text-muted-foreground line-clamp-3">{user.bio}</p>
+                      </div>
+                    )}
+                  </Card>
+
+                  {/* Casting requirements check */}
+                  <Card className="p-4">
+                    <h4 className="font-medium text-sm mb-3">Requirements Check</h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        {user?.verified ? (
+                          <Check className="w-4 h-4 text-emerald-500" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-muted-foreground" />
+                        )}
+                        <span className={user?.verified ? "" : "text-muted-foreground"}>Verified profile</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        {(user?.portfolio?.length ?? 0) > 0 ? (
+                          <Check className="w-4 h-4 text-emerald-500" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-amber-500" />
+                        )}
+                        <span>Portfolio ({user?.portfolio?.length || 0} photos)</span>
+                      </div>
+                      {requiresDigitalTwin && (
+                        <div className="flex items-center gap-2 text-sm">
+                          {meetsDigitalTwinReq ? (
+                            <Check className="w-4 h-4 text-emerald-500" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 text-red-500" />
+                          )}
+                          <span className={meetsDigitalTwinReq ? "" : "text-red-400"}>Digital Twin required</span>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+
                   <Button className="w-full" onClick={() => setApplyStep(2)}>
                     Continue
                   </Button>
                 </>
               )}
 
+              {/* Step 2: Portfolio Selection */}
               {applyStep === 2 && (
                 <>
-                  <div>
-                    <h4 className="font-medium mb-3">Confirm Availability</h4>
-                    <Card className="p-4">
-                      <div className="flex items-center gap-3">
-                        <Calendar className="w-5 h-5 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">
-                            {format(casting.dates.start, "MMM d")} - {format(casting.dates.end, "MMM d, yyyy")}
-                          </p>
-                          <p className="text-sm text-muted-foreground">{casting.location}</p>
-                        </div>
-                      </div>
-                    </Card>
+                  <p className="text-sm text-muted-foreground">
+                    Select photos to include with your application ({selectedPortfolio.length} selected)
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(user?.portfolio || []).map((img, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          if (selectedPortfolio.includes(img)) {
+                            setSelectedPortfolio((prev) => prev.filter((p) => p !== img))
+                          } else {
+                            setSelectedPortfolio((prev) => [...prev, img])
+                          }
+                        }}
+                        className={`aspect-square rounded-lg overflow-hidden border-2 transition-colors relative ${
+                          selectedPortfolio.includes(img) ? "border-foreground" : "border-transparent"
+                        }`}
+                      >
+                        <img
+                          src={img || "/placeholder.svg"}
+                          alt={`Portfolio ${i + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        {selectedPortfolio.includes(img) && (
+                          <div className="absolute top-1 right-1 w-5 h-5 bg-foreground rounded-full flex items-center justify-center">
+                            <Check className="w-3 h-3 text-background" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
                   </div>
+                  {(user?.portfolio || []).length === 0 && (
+                    <p className="text-center text-muted-foreground text-sm py-4">
+                      No portfolio photos yet. You can skip this step.
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setApplyStep(1)}>
                       Back
                     </Button>
                     <Button className="flex-1" onClick={() => setApplyStep(3)}>
+                      Continue
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {/* Step 3: Availability */}
+              {applyStep === 3 && (
+                <>
+                  <Card className="p-4">
+                    <h4 className="font-medium mb-3">Casting Schedule</h4>
+                    <div className="flex items-center gap-3 mb-3">
+                      <Calendar className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">
+                          {format(casting.dates.start, "MMM d")} – {format(casting.dates.end, "MMM d, yyyy")}
+                        </p>
+                        <p className="text-sm text-muted-foreground">{casting.location}</p>
+                      </div>
+                    </div>
+                    {casting.pay && (
+                      <div className="flex items-center gap-3">
+                        <DollarSign className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">
+                            €{casting.pay.amount}/{casting.pay.period}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+
+                  <p className="text-sm text-muted-foreground">
+                    By continuing, you confirm you are available for these dates and location.
+                  </p>
+
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setApplyStep(2)}>
+                      Back
+                    </Button>
+                    <Button className="flex-1" onClick={() => setApplyStep(4)}>
                       I'm Available
                     </Button>
                   </div>
                 </>
               )}
 
-              {applyStep === 3 && (
+              {/* Step 4: Note + Submit */}
+              {applyStep === 4 && (
                 <>
                   <div>
-                    <h4 className="font-medium mb-3">Add a Note (Optional)</h4>
+                    <h4 className="font-medium mb-3">Cover Note</h4>
                     <Textarea
-                      placeholder="Tell the casting director why you're perfect for this..."
+                      placeholder="Tell the casting director why you're perfect for this role..."
                       value={applicationMessage}
                       onChange={(e) => setApplicationMessage(e.target.value)}
                       className="min-h-[120px]"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Optional but recommended</p>
                   </div>
+
+                  {/* Application summary */}
+                  <Card className="p-4">
+                    <h4 className="font-medium text-sm mb-2">Application Summary</h4>
+                    <div className="space-y-1 text-sm text-muted-foreground">
+                      <p>📋 Profile info included</p>
+                      <p>🖼 {selectedPortfolio.length} portfolio photo{selectedPortfolio.length !== 1 ? "s" : ""}</p>
+                      <p>📅 Availability confirmed</p>
+                      {applicationMessage.trim() && <p>💬 Cover note included</p>}
+                    </div>
+                  </Card>
+
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setApplyStep(2)}>
+                    <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setApplyStep(3)}>
                       Back
                     </Button>
-                    <Button className="flex-1" onClick={handleApply}>
-                      Submit Application
+                    <Button className="flex-1" onClick={handleApply} disabled={applyLoading}>
+                      {applyLoading ? "Submitting…" : "Submit Application"}
                     </Button>
                   </div>
                 </>

@@ -14,6 +14,7 @@ import { usePosts } from "@/lib/hooks/use-posts"
 import { api } from "@/lib/api-client"
 import { getRecommendedCastingsForModel } from "@/lib/ai-matching"
 import { Card } from "@/components/ui/card"
+import { CreateStorySheet } from "@/components/stories/create-story-sheet"
 import { ChevronRight, Sparkles, MapPin, DollarSign, Calendar, Clock } from "lucide-react"
 import type { Casting, User } from "@/lib/types"
 
@@ -59,6 +60,9 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
 
   const isModel = user?.role === "model"
 
+  // Story creation state
+  const [showCreateStory, setShowCreateStory] = useState(false)
+
   // Story viewer state
   const [viewingStories, setViewingStories] = useState<{
     userId: string
@@ -77,8 +81,15 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
       {/* Stories Bar */}
       <StoryBar
         onViewStories={(u) => setViewingStories(u)}
-        onCreateStory={() => {
-          // Could open a media picker — for now just a placeholder
+        onCreateStory={() => setShowCreateStory(true)}
+      />
+
+      {/* Create Story Sheet */}
+      <CreateStorySheet
+        open={showCreateStory}
+        onClose={() => setShowCreateStory(false)}
+        onCreated={() => {
+          // Stories will refresh on next feed load
         }}
       />
 
