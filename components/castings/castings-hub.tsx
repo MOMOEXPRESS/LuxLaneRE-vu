@@ -342,10 +342,11 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
             >
               {filteredCastings.map((casting, index) => {
                 const appStatus = getApplicationStatus(casting.id)
-                // Every 5th card is featured; alternate sides (even=left, odd=right)
+                // Every 5th card is featured; alternate left/right sides
                 const isFeatured = index % 5 === 0
                 const featuredCount = Math.floor(index / 5)
-                const isRightAligned = isFeatured && featuredCount % 2 === 1
+                // Even featured (0,2,4...) = left, Odd featured (1,3,5...) = right
+                const featuredSide = isFeatured ? (featuredCount % 2 === 0 ? "left" : "right") : null
 
                 return (
                   <motion.div
@@ -361,7 +362,7 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
                     }}
                     className={
                       isFeatured
-                        ? `col-span-2 row-span-2 ${isRightAligned ? "col-start-2 sm:col-start-3 lg:col-start-4" : ""}`
+                        ? `col-span-2 row-span-2 ${featuredSide === "left" ? "col-start-1" : "col-start-2 sm:col-start-3 lg:col-start-4"}`
                         : ""
                     }
                   >
