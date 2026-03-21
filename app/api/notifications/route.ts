@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
@@ -13,32 +13,20 @@ export async function GET(request: NextRequest) {
     const unreadOnly = searchParams.get("unread") === "true"
     const limit = Number(searchParams.get("limit")) || 50
 
-    let notifications
-    if (unreadOnly) {
-      notifications = await db`
-        SELECT * FROM notifications 
-        WHERE user_id = ${user.id} AND read = false
-        ORDER BY created_at DESC
-        LIMIT ${limit}
-      `
-    } else {
-      notifications = await db`
-        SELECT * FROM notifications 
-        WHERE user_id = ${user.id}
-        ORDER BY created_at DESC
-        LIMIT ${limit}
-      `
-    }
-
-    // Get unread count
-    const unreadCount = await db`
-      SELECT COUNT(*) as count FROM notifications WHERE user_id = ${user.id} AND read = false
-    `
-
-    return NextResponse.json({
-      notifications,
-      unreadCount: Number(unreadCount[0]?.count || 0),
+    const notifications = await prisma.notification.findMany({
+      where: {
+        userId: user.id,
+        ...(unreadOnly ? { read: false } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
     })
+
+    const unreadCount = await prisma.notification.count({
+      where: { userId: user.id, read: false },
+    })
+
+    return NextResponse.json({ notifications, unreadCount })
   } catch (error) {
     console.error("Get notifications error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

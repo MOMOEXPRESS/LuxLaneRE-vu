@@ -130,35 +130,22 @@
   margin-bottom: 1rem;
 }
 
-/* Castings: Pinterest-style masonry – 2 cols mobile, image-dominant pins, dark feed */
+/* Castings: compact grid – 3 cols mobile, small square-ish tiles */
 .pinterest-masonry-castings {
-  column-count: 2;
-  column-gap: 0.625rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.375rem;
 }
 @media (min-width: 640px) {
   .pinterest-masonry-castings {
-    column-count: 3;
-    column-gap: 0.75rem;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
   }
 }
 @media (min-width: 1024px) {
   .pinterest-masonry-castings {
-    column-count: 4;
-    column-gap: 1rem;
-  }
-}
-.pinterest-masonry-castings > * {
-  break-inside: avoid;
-  margin-bottom: 0.625rem;
-}
-@media (min-width: 640px) {
-  .pinterest-masonry-castings > * {
-    margin-bottom: 0.75rem;
-  }
-}
-@media (min-width: 1024px) {
-  .pinterest-masonry-castings > * {
-    margin-bottom: 1rem;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.625rem;
   }
 }
 

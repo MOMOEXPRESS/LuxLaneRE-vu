@@ -3,12 +3,9 @@ import { cookies } from "next/headers"
 import { createHash } from "crypto"
 import bcrypt from "bcryptjs"
 import { v4 as uuidv4 } from "uuid"
-import { prisma } from "./prisma"
-import { Role } from "@prisma/client"
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "luxlane-secret-key-change-in-production")
-const ACCESS_TOKEN_EXPIRY = "15m"
-const REFRESH_TOKEN_EXPIRY_DAYS = 7
+const ACCESS_TOKEN_EXPIRY = "24h"
 
 export type UserRole = "model" | "agency" | "brand" | "client"
 
@@ -16,6 +13,8 @@ export interface JWTPayload {
   userId: string
   email: string
   role: UserRole
+  username: string
+  displayName: string
   iat?: number
   exp?: number
 }
@@ -31,15 +30,11 @@ export interface AuthUser {
   onboardingComplete: boolean
 }
 
-function roleToLower(role: Role): UserRole {
-  return role.toLowerCase() as UserRole
-}
-
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex")
 }
 
-// Generate access token (short-lived)
+// Generate access token
 export async function generateAccessToken(payload: Omit<JWTPayload, "iat" | "exp">): Promise<string> {
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
@@ -48,58 +43,14 @@ export async function generateAccessToken(payload: Omit<JWTPayload, "iat" | "exp
     .sign(JWT_SECRET)
 }
 
-// Generate refresh token (long-lived, stored in DB)
-export async function generateRefreshToken(userId: string): Promise<string> {
-  const token = uuidv4()
-  const expiresAt = new Date()
-  expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS)
-
-  await prisma.refreshToken.create({
-    data: {
-      userId,
-      tokenHash: hashToken(token),
-      expiresAt,
-    },
-  })
-
-  return token
-}
-
 // Verify access token
 export async function verifyAccessToken(token: string): Promise<JWTPayload | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload as JWTPayload
+    return payload as unknown as JWTPayload
   } catch {
     return null
   }
-}
-
-// Verify refresh token (check DB)
-export async function verifyRefreshToken(token: string): Promise<string | null> {
-  const hash = hashToken(token)
-  const row = await prisma.refreshToken.findFirst({
-    where: { tokenHash: hash, revoked: false },
-  })
-  if (!row || row.expiresAt < new Date()) return null
-  return row.userId
-}
-
-// Revoke refresh token
-export async function revokeRefreshToken(token: string): Promise<void> {
-  const hash = hashToken(token)
-  await prisma.refreshToken.updateMany({
-    where: { tokenHash: hash },
-    data: { revoked: true },
-  })
-}
-
-// Revoke all refresh tokens for user
-export async function revokeAllUserTokens(userId: string): Promise<void> {
-  await prisma.refreshToken.updateMany({
-    where: { userId },
-    data: { revoked: true },
-  })
 }
 
 // Hash password
@@ -112,14 +63,50 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash)
 }
 
-// Get current user from request (tries refresh token if access token missing/expired)
+// Try to get Prisma client — returns null if DB is unavailable or schema is out of sync
+async function tryPrisma() {
+  try {
+    const { prisma } = await import("./prisma")
+    // Check connectivity AND schema by touching a real table
+    await prisma.user.findFirst({ take: 1, select: { id: true } })
+    return prisma
+  } catch {
+    return null
+  }
+}
+
+// Generate refresh token (DB-backed, silently skipped if DB unavailable)
+export async function generateRefreshToken(userId: string): Promise<string> {
+  const token = uuidv4()
+  try {
+    const prisma = await tryPrisma()
+    if (prisma) {
+      const expiresAt = new Date()
+      expiresAt.setDate(expiresAt.getDate() + 7)
+      await prisma.refreshToken.create({
+        data: { userId, tokenHash: hashToken(token), expiresAt },
+      })
+    }
+  } catch {
+    // DB unavailable or mock user ID — skip storing refresh token
+  }
+  return token
+}
+
+// Get current user from JWT (falls back to JWT-only when DB is unavailable)
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
 
-  if (accessToken) {
-    const payload = await verifyAccessToken(accessToken)
-    if (payload) {
+  if (!accessToken) return null
+
+  const payload = await verifyAccessToken(accessToken)
+  if (!payload) return null
+
+  // Try DB first for full profile data
+  const prisma = await tryPrisma()
+  if (prisma) {
+    try {
       const user = await prisma.user.findUnique({
         where: { id: payload.userId },
         include: { profile: true },
@@ -129,7 +116,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
         return {
           id: user.id,
           email: user.email,
-          role: roleToLower(user.role),
+          role: user.role.toLowerCase() as UserRole,
           username: user.username,
           displayName: profile?.displayName ?? user.username,
           avatarUrl: profile?.avatarUrl ?? null,
@@ -137,41 +124,21 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
           onboardingComplete: !!profile,
         }
       }
+    } catch {
+      // DB query failed, fall through to JWT-only
     }
   }
 
-  // Access token missing or expired – try refresh token
-  const refreshToken = cookieStore.get("refresh_token")?.value
-  if (!refreshToken) return null
-
-  const userId = await verifyRefreshToken(refreshToken)
-  if (!userId) return null
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { profile: true },
-  })
-  if (!user) return null
-
-  await revokeRefreshToken(refreshToken)
-  const newAccessToken = await generateAccessToken({
-    userId: user.id,
-    email: user.email,
-    role: roleToLower(user.role),
-  })
-  const newRefreshToken = await generateRefreshToken(user.id)
-  await setAuthCookies(newAccessToken, newRefreshToken)
-
-  const profile = user.profile
+  // JWT-only fallback (mock / no-DB mode)
   return {
-    id: user.id,
-    email: user.email,
-    role: roleToLower(user.role),
-    username: user.username,
-    displayName: profile?.displayName ?? user.username,
-    avatarUrl: profile?.avatarUrl ?? null,
-    isVerified: profile ? profile.verificationStatus !== "UNVERIFIED" : false,
-    onboardingComplete: !!profile,
+    id: payload.userId,
+    email: payload.email,
+    role: payload.role,
+    username: payload.username || payload.email.split("@")[0],
+    displayName: payload.displayName || payload.username || payload.email.split("@")[0],
+    avatarUrl: null,
+    isVerified: false,
+    onboardingComplete: true,
   }
 }
 
@@ -183,7 +150,7 @@ export async function setAuthCookies(accessToken: string, refreshToken: string):
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 15 * 60,
+    maxAge: 24 * 60 * 60,
     path: "/",
   })
 
@@ -191,7 +158,7 @@ export async function setAuthCookies(accessToken: string, refreshToken: string):
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
+    maxAge: 7 * 24 * 60 * 60,
     path: "/",
   })
 }
@@ -209,6 +176,9 @@ export async function generateUniqueUsername(displayName: string): Promise<strin
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "")
     .slice(0, 15) || "user"
+
+  const prisma = await tryPrisma()
+  if (!prisma) return base
 
   let username = base
   let counter = 1
@@ -229,7 +199,6 @@ export async function getAuthHeader(): Promise<string | null> {
   return accessToken ? `Bearer ${accessToken}` : null
 }
 
-// For API routes that receive Authorization header (e.g. fetch with credentials)
 export function parseBearerToken(authHeader: string | null): string | null {
   if (!authHeader?.startsWith("Bearer ")) return null
   return authHeader.slice(7)

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       where: { id: castingId },
       select: { createdBy: true },
     })
-    const isBrandOrAgency = currentUser.role === "brand" || currentUser.role === "agency"
+    const isBrandOrAgency = currentUser.role === "brand" || currentUser.role === "agency" || currentUser.role === "client"
     const isCreator = castingCheck?.createdBy === currentUser.id
     if (!isBrandOrAgency && !isCreator) {
       return NextResponse.json({ error: "Only casting creator or brand/agency can view top matches" }, { status: 403 })

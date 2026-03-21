@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -11,54 +11,55 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Verify user is the casting creator
-    const casting = await db`
-      SELECT creator_id FROM castings WHERE id = ${castingId}
-    `
+    const casting = await prisma.casting.findUnique({
+      where: { id: castingId },
+      select: { createdBy: true },
+    })
 
-    if (casting.length === 0) {
+    if (!casting) {
       return NextResponse.json({ error: "Casting not found" }, { status: 404 })
     }
 
-    if (casting[0].creator_id !== user.id) {
+    if (casting.createdBy !== user.id) {
       return NextResponse.json({ error: "Not authorized to view submissions" }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")
 
-    let submissions
-    if (status) {
-      submissions = await db`
-        SELECT s.*, 
-               u.display_name as model_name, u.avatar_url as model_avatar, u.username as model_username,
-               u.is_verified as model_verified,
-               mp.height_cm, mp.experience_tags, mp.score as model_score,
-               su.display_name as submitted_by_name
-        FROM submissions s
-        JOIN users u ON s.model_id = u.id
-        LEFT JOIN model_profiles mp ON s.model_id = mp.user_id
-        LEFT JOIN users su ON s.submitted_by_id = su.id
-        WHERE s.casting_id = ${castingId} AND s.status = ${status}
-        ORDER BY s.created_at DESC
-      `
-    } else {
-      submissions = await db`
-        SELECT s.*, 
-               u.display_name as model_name, u.avatar_url as model_avatar, u.username as model_username,
-               u.is_verified as model_verified,
-               mp.height_cm, mp.experience_tags, mp.score as model_score,
-               su.display_name as submitted_by_name
-        FROM submissions s
-        JOIN users u ON s.model_id = u.id
-        LEFT JOIN model_profiles mp ON s.model_id = mp.user_id
-        LEFT JOIN users su ON s.submitted_by_id = su.id
-        WHERE s.casting_id = ${castingId}
-        ORDER BY s.created_at DESC
-      `
-    }
+    const submissions = await prisma.submission.findMany({
+      where: {
+        castingId,
+        ...(status ? { status: status.toUpperCase() as never } : {}),
+      },
+      include: {
+        model: {
+          include: {
+            profile: true,
+            modelProfile: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    })
 
-    return NextResponse.json({ submissions })
+    const result = submissions.map((s) => ({
+      id: s.id,
+      castingId: s.castingId,
+      modelId: s.modelId,
+      submittedBy: s.submittedBy,
+      status: s.status,
+      note: s.note,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+      modelName: s.model.profile?.displayName ?? s.model.username,
+      modelAvatar: s.model.profile?.avatarUrl ?? null,
+      modelUsername: s.model.username,
+      modelHeightCm: s.model.modelProfile?.heightCm ?? null,
+      modelScore: s.model.modelProfile?.luxlaneScore ?? 0,
+    }))
+
+    return NextResponse.json({ submissions: result })
   } catch (error) {
     console.error("Get submissions error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

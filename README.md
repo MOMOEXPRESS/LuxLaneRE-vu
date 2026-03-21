@@ -28,6 +28,29 @@ Or use the helper script from the project root: `./start.sh` (starts Docker Post
 This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
 Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
 
+## Deploy on Vercel (fix signup / DB)
+
+Signup on Vercel fails if the app has no database. Vercel **cannot** use your local Docker Postgres.
+
+1. **Add a hosted Postgres** (pick one):
+   - [Vercel Postgres](https://vercel.com/docs/storage/vercel-postgres) (one-click in Vercel dashboard)
+   - [Neon](https://neon.tech) → create project → copy connection string
+   - [Supabase](https://supabase.com) → Project Settings → Database → connection string
+
+2. **In Vercel → your project → Settings → Environment Variables**, add:
+   - `DATABASE_URL` = your **hosted** Postgres URL (e.g. `postgresql://user:pass@host/db?sslmode=require`)
+   - `JWT_SECRET` = a long random string (e.g. `openssl rand -base64 32`)
+
+3. **Run migrations** on that DB once:
+   - Either in Vercel Build: add build command `prisma generate && prisma migrate deploy && next build` (and keep `next build` in there), or
+   - Locally: set `DATABASE_URL` to the **production** URL temporarily and run `npx prisma migrate deploy`, then switch back to local.
+
+4. **Redeploy** (new deployment or “Redeploy” on the latest).
+
+After that, signup and login use the hosted DB. Local Docker is only for your machine.
+
+---
+
 ## Deployment
 
 Your project is live at:

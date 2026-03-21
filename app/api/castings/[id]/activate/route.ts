@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -11,26 +11,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Verify ownership
-    const casting = await db`
-      SELECT creator_id, status FROM castings WHERE id = ${id}
-    `
+    const casting = await prisma.casting.findUnique({
+      where: { id },
+      select: { createdBy: true, status: true },
+    })
 
-    if (casting.length === 0) {
+    if (!casting) {
       return NextResponse.json({ error: "Casting not found" }, { status: 404 })
     }
 
-    if (casting[0].creator_id !== user.id) {
+    if (casting.createdBy !== user.id) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 })
     }
 
-    if (casting[0].status !== "draft") {
+    if (casting.status !== "DRAFT") {
       return NextResponse.json({ error: "Can only activate draft castings" }, { status: 400 })
     }
 
-    await db`
-      UPDATE castings SET status = 'active', updated_at = NOW() WHERE id = ${id}
-    `
+    await prisma.casting.update({
+      where: { id },
+      data: { status: "ACTIVE" },
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

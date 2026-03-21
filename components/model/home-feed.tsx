@@ -95,7 +95,7 @@ export function HomeFeed({ onViewCasting, onViewOffer }: HomeFeedProps) {
           </div>
           <div className="space-y-3">
             {applications.slice(0, 3).map((app) => (
-              <ApplicationCard key={app.id} application={app} onView={() => onViewCasting(app.casting)} />
+              <ApplicationCard key={app.id} application={app} onView={() => app.casting && onViewCasting(app.casting)} />
             ))}
           </div>
         </section>
@@ -187,14 +187,14 @@ function ApplicationCard({
       <div className="flex items-start gap-3">
         <Avatar className="w-10 h-10">
           <AvatarImage
-            src={application.casting.creator.avatar || "/placeholder.svg"}
-            alt={application.casting.creator.name}
+            src={application.casting?.creator.avatar || "/placeholder.svg"}
+            alt={application.casting?.creator.name ?? ""}
           />
-          <AvatarFallback>{application.casting.creator.name[0]}</AvatarFallback>
+          <AvatarFallback>{application.casting?.creator.name?.[0] ?? "?"}</AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <p className="font-medium truncate">{application.casting.title}</p>
-          <p className="text-sm text-muted-foreground truncate">{application.casting.creator.name}</p>
+          <p className="font-medium truncate">{application.casting?.title ?? "Casting"}</p>
+          <p className="text-sm text-muted-foreground truncate">{application.casting?.creator.name}</p>
           <div className="flex items-center gap-1 mt-2">
             {StatusIcon && <StatusIcon className={`w-3 h-3 ${status.color}`} />}
             <span className={`text-xs ${status.color}`}>{status.label}</span>

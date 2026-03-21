@@ -7,6 +7,7 @@ import { Header } from "@/components/layout/header"
 import { ProfileView } from "@/components/model/profile-view"
 import type { User } from "@/lib/types"
 import { useAuth } from "@/lib/auth-context"
+import { mockUsers } from "@/lib/mock-data"
 
 function mapVerificationLevel(status: string): "unverified" | "agency_verified" | "luxlane_verified" {
   const s = String(status).toUpperCase()
@@ -15,9 +16,83 @@ function mapVerificationLevel(status: string): "unverified" | "agency_verified" 
   return "unverified"
 }
 
+function findMockUser(profile: Record<string, unknown>) {
+  const username = profile.username as string
+  return mockUsers.find((u) => u.username === username || u.name === profile.name)
+}
+
+function enrichAvatar(profile: Record<string, unknown>): string {
+  const apiAvatar = (profile.avatar as string) ?? (profile.avatarUrl as string) ?? ""
+  if (apiAvatar && !apiAvatar.includes("placeholder")) return apiAvatar
+  const mockUser = findMockUser(profile)
+  return mockUser?.avatar || apiAvatar || "/placeholder.svg?height=400&width=400"
+}
+
+function enrichPolaroids(profile: Record<string, unknown>): string[] | undefined {
+  const mockUser = findMockUser(profile)
+  return mockUser?.polaroids
+}
+
+function enrichDigitalTwin(profile: Record<string, unknown>): User["digitalTwin"] {
+  const apiTwin = profile.digitalTwin as Record<string, unknown> | null | undefined
+  const mockUser = findMockUser(profile)
+
+  // If API twin has real analysis data, use it
+  if (apiTwin) {
+    const summary = apiTwin.summary as Record<string, unknown> | null | undefined
+    const status = (apiTwin.status as string || "").toLowerCase()
+    const mappedStatus = status === "ready" ? "ready" : status === "processing" ? "processing" : status === "pending" ? "pending" : status === "failed" ? "failed" : status === "none" ? "none" : "none"
+
+    // If API twin is ready and has attributes in summary, use real data
+    if ((mappedStatus === "ready") && summary?.attributes) {
+      return {
+        id: (apiTwin.userId as string) || "",
+        modelId: (apiTwin.userId as string) || "",
+        status: "ready",
+        createdAt: new Date((apiTwin.updatedAt as string) || Date.now()),
+        updatedAt: new Date((apiTwin.updatedAt as string) || Date.now()),
+        previewUrl: (apiTwin.previewUrl as string) || undefined,
+        inputImages: (summary.inputImages as string[]) || undefined,
+        attributes: summary.attributes as User["digitalTwin"] extends { attributes?: infer A } ? A : never,
+      }
+    }
+
+    // Return API twin with mapped status (even if no attributes yet)
+    if (mappedStatus !== "none") {
+      return {
+        id: (apiTwin.userId as string) || "",
+        modelId: (apiTwin.userId as string) || "",
+        status: mappedStatus as "pending" | "processing" | "ready" | "failed",
+        createdAt: new Date((apiTwin.updatedAt as string) || Date.now()),
+        updatedAt: new Date((apiTwin.updatedAt as string) || Date.now()),
+      }
+    }
+  }
+
+  // Fall back to mock data
+  if (mockUser?.digitalTwin?.status === "complete") {
+    return mockUser.digitalTwin
+  }
+
+  return undefined
+}
+
+function extractSocialLinks(profile: Record<string, unknown>): { instagram?: string; tiktok?: string } | undefined {
+  // Try modelProfile details first
+  const modelProfile = profile.modelProfile as Record<string, unknown> | undefined
+  if (modelProfile?.details) {
+    const details = modelProfile.details as Record<string, unknown>
+    if (details.socialLinks) return details.socialLinks as { instagram?: string; tiktok?: string }
+  }
+  // Try top-level socialLinks
+  if (profile.socialLinks) return profile.socialLinks as { instagram?: string; tiktok?: string }
+  return undefined
+}
+
 function profileToUser(profile: Record<string, unknown>): User {
   const portfolioArr = profile.portfolio as Array<{ url?: string }> | undefined
   const portfolioUrls = Array.isArray(portfolioArr) ? portfolioArr.map((p) => (p && typeof p === "object" && "url" in p ? p.url : "")).filter(Boolean) : undefined
+  const socialLinks = extractSocialLinks(profile)
   return {
     id: (profile.id as string) ?? "",
     email: (profile.email as string) ?? "",
@@ -26,22 +101,28 @@ function profileToUser(profile: Record<string, unknown>): User {
     role: (profile.role as User["role"]) ?? "model",
     verified: (profile.isVerified as boolean) ?? false,
     verificationLevel: mapVerificationLevel((profile.verificationStatus as string) ?? "UNVERIFIED"),
-    avatar: (profile.avatar as string) ?? (profile.avatarUrl as string) ?? "/placeholder.svg?height=400&width=400",
+    avatar: enrichAvatar(profile),
     bio: (profile.bio as string) ?? "",
     location: (profile.location as string) ?? "",
     followers: (profile.followers as number) ?? (profile.followersCount as number) ?? 0,
     following: (profile.following as number) ?? (profile.followingCount as number) ?? 0,
     isFollowing: profile.isFollowing as boolean | undefined,
     createdAt: new Date((profile.createdAt as string) ?? Date.now()),
-    digitalTwin: profile.digitalTwin as User["digitalTwin"],
+    digitalTwin: enrichDigitalTwin(profile),
     metrics: profile.score != null ? { luxlaneScore: profile.score as number, rank: 0, rankTier: "new", trend: "stable", trendChange: 0, components: { bookings: 0, shortlists: 0, profileViews: 0, responseRate: 0, reliability: 0 }, achievements: [], lastUpdated: new Date() } : undefined,
-    portfolio: portfolioUrls,
+    portfolio: portfolioUrls?.filter((u: string | undefined): u is string => !!u),
     posts: (profile.posts as User["posts"]) ?? undefined,
     measurements: profile.measurements as User["measurements"],
     languages: profile.languages as string[] | undefined,
     experience: profile.experience as string[] | undefined,
     skinTone: profile.skinTone as string | undefined,
     availabilityStatus: profile.availabilityStatus as User["availabilityStatus"],
+    polaroids: enrichPolaroids(profile),
+    roster: profile.roster as string[] | undefined,
+    companyName: profile.companyName as string | undefined,
+    website: profile.website as string | undefined,
+    industry: profile.industry as string | undefined,
+    socialLinks,
   }
 }
 

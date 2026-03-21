@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { ActiveCastings } from "./active-castings"
 import { FeedToggle } from "./feed-toggle"
 import { FeedPost } from "./feed-post"
+import { StoryBar } from "@/components/stories/story-bar"
+import { StoryViewer } from "@/components/stories/story-viewer"
 import { MyRankCard } from "@/components/scoreboard/my-rank-card"
 import { useAuth } from "@/lib/auth-context"
 import { useStore } from "@/lib/store-context"
@@ -57,11 +59,37 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
 
   const isModel = user?.role === "model"
 
+  // Story viewer state
+  const [viewingStories, setViewingStories] = useState<{
+    userId: string
+    username: string
+    name: string
+    avatar: string | null
+    isOwn: boolean
+    stories: { id: string; mediaUrl: string; mediaType: string; caption: string | null; viewCount: number; viewed: boolean; createdAt: string; expiresAt: string }[]
+  } | null>(null)
+
   // Get recommended castings for model
   const recommendedCastings = isModel && user ? getRecommendedCastingsForModel(user, castings, 3) : []
 
   return (
     <div className="pb-20">
+      {/* Stories Bar */}
+      <StoryBar
+        onViewStories={(u) => setViewingStories(u)}
+        onCreateStory={() => {
+          // Could open a media picker — for now just a placeholder
+        }}
+      />
+
+      {/* Story Viewer */}
+      {viewingStories && (
+        <StoryViewer
+          user={viewingStories}
+          onClose={() => setViewingStories(null)}
+        />
+      )}
+
       {/* My Rank Card - Model only */}
       {isModel && user?.metrics && (
         <div className="px-4 pt-4">

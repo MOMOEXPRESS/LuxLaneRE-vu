@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 
-// GET /api/follows/:username/list?type=followers|following&limit=30&cursor=id
+// GET /api/users/:username/followers?type=followers|following&limit=30&cursor=id
 export async function GET(request: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   try {
     const { username } = await params
@@ -10,71 +10,72 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const limit = Math.min(Number(searchParams.get("limit") || 30), 100)
     const cursor = searchParams.get("cursor")
 
-    // Get user by username
-    const users = await db`
-      SELECT id FROM users WHERE username = ${username}
-    `
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: { id: true },
+    })
 
-    if (users.length === 0) {
+    if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const userId = users[0].id
-
-    let results
     if (type === "followers") {
-      // Get users who follow this user
-      if (cursor) {
-        results = await db`
-          SELECT u.id, u.username, u.display_name, u.avatar_url, u.role, u.is_verified, u.tier
-          FROM follows f
-          JOIN users u ON u.id = f.follower_id
-          WHERE f.following_id = ${userId}
-            AND f.created_at < (SELECT created_at FROM follows WHERE follower_id = ${cursor} AND following_id = ${userId})
-          ORDER BY f.created_at DESC
-          LIMIT ${limit}
-        `
-      } else {
-        results = await db`
-          SELECT u.id, u.username, u.display_name, u.avatar_url, u.role, u.is_verified, u.tier
-          FROM follows f
-          JOIN users u ON u.id = f.follower_id
-          WHERE f.following_id = ${userId}
-          ORDER BY f.created_at DESC
-          LIMIT ${limit}
-        `
-      }
+      const follows = await prisma.follow.findMany({
+        where: { followingId: user.id },
+        include: {
+          follower: {
+            include: { profile: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        ...(cursor
+          ? {
+              cursor: { followerId_followingId: { followerId: cursor, followingId: user.id } },
+              skip: 1,
+            }
+          : {}),
+      })
+
+      const results = follows.map((f) => ({
+        id: f.follower.id,
+        username: f.follower.username,
+        displayName: f.follower.profile?.displayName ?? f.follower.username,
+        avatarUrl: f.follower.profile?.avatarUrl ?? null,
+        role: f.follower.role,
+      }))
+
+      const nextCursor = results.length === limit ? results[results.length - 1]?.id : null
+      return NextResponse.json({ users: results, nextCursor })
     } else {
-      // Get users this user follows
-      if (cursor) {
-        results = await db`
-          SELECT u.id, u.username, u.display_name, u.avatar_url, u.role, u.is_verified, u.tier
-          FROM follows f
-          JOIN users u ON u.id = f.following_id
-          WHERE f.follower_id = ${userId}
-            AND f.created_at < (SELECT created_at FROM follows WHERE follower_id = ${userId} AND following_id = ${cursor})
-          ORDER BY f.created_at DESC
-          LIMIT ${limit}
-        `
-      } else {
-        results = await db`
-          SELECT u.id, u.username, u.display_name, u.avatar_url, u.role, u.is_verified, u.tier
-          FROM follows f
-          JOIN users u ON u.id = f.following_id
-          WHERE f.follower_id = ${userId}
-          ORDER BY f.created_at DESC
-          LIMIT ${limit}
-        `
-      }
+      const follows = await prisma.follow.findMany({
+        where: { followerId: user.id },
+        include: {
+          following: {
+            include: { profile: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        ...(cursor
+          ? {
+              cursor: { followerId_followingId: { followerId: user.id, followingId: cursor } },
+              skip: 1,
+            }
+          : {}),
+      })
+
+      const results = follows.map((f) => ({
+        id: f.following.id,
+        username: f.following.username,
+        displayName: f.following.profile?.displayName ?? f.following.username,
+        avatarUrl: f.following.profile?.avatarUrl ?? null,
+        role: f.following.role,
+      }))
+
+      const nextCursor = results.length === limit ? results[results.length - 1]?.id : null
+      return NextResponse.json({ users: results, nextCursor })
     }
-
-    // Get next cursor
-    const nextCursor = results.length === limit ? results[results.length - 1]?.id : null
-
-    return NextResponse.json({
-      users: results,
-      nextCursor,
-    })
   } catch (error) {
     console.error("Get follow list error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

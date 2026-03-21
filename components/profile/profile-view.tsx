@@ -6,7 +6,12 @@ import { ProfileTabs, type ProfileTab } from "./profile-tabs"
 import { ProfileGrid } from "./profile-grid"
 import { ModelCompCard } from "./model-comp-card"
 import { AgencyRoster } from "./agency-roster"
+import { AgencyCastings } from "./agency-castings"
 import { mockPosts, mockUsers, getCurrentUser } from "@/lib/mock-data"
+import { useStore } from "@/lib/store-context"
+import { useAuth } from "@/lib/auth-context"
+import { Button } from "@/components/ui/button"
+import { Send, CheckCircle } from "lucide-react"
 
 interface ProfileViewProps {
   userId?: string
@@ -15,15 +20,19 @@ interface ProfileViewProps {
   onMessage: (userId: string) => void
   onBook?: (userId: string) => void
   onProfileClick: (userId: string) => void
+  onViewCasting?: (casting: import("@/lib/types").Casting) => void
 }
 
-export function ProfileView({ userId, onBack, onSettings, onMessage, onBook, onProfileClick }: ProfileViewProps) {
+export function ProfileView({ userId, onBack, onSettings, onMessage, onBook, onProfileClick, onViewCasting }: ProfileViewProps) {
   const currentUser = getCurrentUser()
+  const { user: authUser } = useAuth()
+  const { getCastingsForCreator } = useStore()
   const profileUser = userId ? mockUsers.find((u) => u.id === userId) || currentUser : currentUser
   const isOwnProfile = profileUser.id === currentUser.id
 
   const [isFollowing, setIsFollowing] = useState(false)
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts")
+  const [hasApplied, setHasApplied] = useState(false)
 
   const userPosts = mockPosts.filter((p) => p.userId === profileUser.id)
   const savedPosts = mockPosts.filter((p) => p.bookmarked)
@@ -33,6 +42,15 @@ export function ProfileView({ userId, onBack, onSettings, onMessage, onBook, onP
     profileUser.role === "agency" && profileUser.roster
       ? mockUsers.filter((u) => profileUser.roster?.includes(u.id))
       : []
+
+  // Get agency castings from store
+  const agencyCastings = profileUser.role === "agency" ? getCastingsForCreator(profileUser.id) : []
+
+  // Show apply button if current user is a model viewing an agency profile
+  const canApplyToAgency =
+    !isOwnProfile &&
+    profileUser.role === "agency" &&
+    (authUser?.role === "model" || currentUser.role === "model")
 
   return (
     <div className="min-h-screen pb-20">
@@ -52,9 +70,34 @@ export function ProfileView({ userId, onBack, onSettings, onMessage, onBook, onP
         <ModelCompCard measurements={profileUser.measurements} portfolio={profileUser.portfolio} />
       )}
 
+      {/* Apply to Agency Button */}
+      {canApplyToAgency && (
+        <div className="px-4 py-3 border-b border-border/30">
+          {hasApplied ? (
+            <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500/10 text-emerald-400">
+              <CheckCircle className="w-5 h-5" />
+              <span className="font-medium">Application Sent</span>
+            </div>
+          ) : (
+            <Button
+              onClick={() => setHasApplied(true)}
+              className="w-full h-12 rounded-xl bg-white text-black hover:bg-zinc-200 font-semibold text-base"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Apply to {profileUser.name}
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Agency Roster */}
       {profileUser.role === "agency" && rosterModels.length > 0 && (
         <AgencyRoster roster={rosterModels} onModelClick={onProfileClick} />
+      )}
+
+      {/* Agency Castings */}
+      {profileUser.role === "agency" && agencyCastings.length > 0 && (
+        <AgencyCastings castings={agencyCastings} onViewCasting={onViewCasting} />
       )}
 
       <ProfileTabs

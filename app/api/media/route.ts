@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
@@ -13,22 +13,13 @@ export async function GET(request: NextRequest) {
     const ownerId = searchParams.get("ownerId") || user.id
     const type = searchParams.get("type")
 
-    let media
-    if (type) {
-      media = await db`
-        SELECT id, url, thumbnail_url, type, caption, created_at
-        FROM media_assets 
-        WHERE owner_id = ${ownerId} AND type = ${type}
-        ORDER BY created_at DESC
-      `
-    } else {
-      media = await db`
-        SELECT id, url, thumbnail_url, type, caption, created_at
-        FROM media_assets 
-        WHERE owner_id = ${ownerId}
-        ORDER BY created_at DESC
-      `
-    }
+    const media = await prisma.mediaAsset.findMany({
+      where: {
+        ownerId,
+        ...(type ? { type: type.toUpperCase() as never } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+    })
 
     return NextResponse.json({ media })
   } catch (error) {
