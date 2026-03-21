@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { useAuth } from "@/lib/auth-context"
 import { useStore } from "@/lib/store-context"
 import type { Casting } from "@/lib/types"
-import { Search, Plus, SlidersHorizontal, X } from "lucide-react"
+import { Search, Plus, SlidersHorizontal, X, MapPin, DollarSign } from "lucide-react"
 
 type CastingTab = "active" | "foryou" | "invited" | "applied" | "shortlisted" | "booked"
 
@@ -336,30 +336,47 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
           className="px-3 py-4"
         >
           {filteredCastings.length > 0 ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-1.5 auto-rows-auto">
+            <motion.div
+              className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-1.5 auto-rows-auto"
+              layout
+            >
               {filteredCastings.map((casting, index) => {
                 const appStatus = getApplicationStatus(casting.id)
+                // Every 5th card is featured; alternate sides (even=left, odd=right)
                 const isFeatured = index % 5 === 0
+                const featuredCount = Math.floor(index / 5)
+                const isRightAligned = isFeatured && featuredCount % 2 === 1
+
                 return (
                   <motion.div
                     key={casting.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: Math.min(index * 0.03, 0.25) }}
-                    className={isFeatured ? "col-span-2 row-span-2" : ""}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{
+                      layout: { type: "spring", stiffness: 300, damping: 30 },
+                      opacity: { delay: Math.min(index * 0.03, 0.25) },
+                      scale: { delay: Math.min(index * 0.03, 0.25) },
+                    }}
+                    className={
+                      isFeatured
+                        ? `col-span-2 row-span-2 ${isRightAligned ? "col-start-2 sm:col-start-3 lg:col-start-4" : ""}`
+                        : ""
+                    }
                   >
                     <Card
-                      className="overflow-hidden cursor-pointer rounded-xl border-0 bg-zinc-900 shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.97] !p-0 !gap-0 h-full"
+                      className="overflow-hidden cursor-pointer rounded-xl border-0 bg-zinc-900 shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.97] !p-0 !gap-0 h-full group"
                       onClick={() => onViewCasting(casting)}
                     >
-                      {/* Compact tile image */}
-                      <div className={`relative bg-zinc-800 ${isFeatured ? "h-full" : "aspect-square"}`}>
+                      {/* Tile image */}
+                      <div className={`relative bg-zinc-800 ${isFeatured ? "h-full min-h-[240px]" : "aspect-square"}`}>
                         <img
                           src={casting.images?.[0] || "/placeholder.svg"}
                           alt={casting.title}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
-                        <div className={`absolute top-1.5 left-1.5 flex items-center gap-1`}>
+                        <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
                           <span className={`rounded bg-black/60 backdrop-blur-sm font-medium text-white ${isFeatured ? "px-2 py-1 text-xs" : "px-1.5 py-0.5 text-[9px]"}`}>
                             {typeLabels[casting.type]}
                           </span>
@@ -377,19 +394,31 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
                             </span>
                           )}
                         </div>
-                        {/* Featured card has overlay caption at bottom of image */}
+                        {/* Featured card overlay with details */}
                         {isFeatured && (
-                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 pt-8">
+                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3 pt-12">
                             <h3 className="font-semibold text-sm text-white line-clamp-2 leading-snug">
                               {casting.title}
                             </h3>
                             <p className="mt-0.5 text-xs text-zinc-300 truncate">
                               {casting.creator.name}
                             </p>
+                            <div className="mt-2 flex items-center gap-3 text-[10px] text-zinc-400">
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3" />
+                                {casting.location || "Remote"}
+                              </span>
+                              {casting.pay && (
+                                <span className="flex items-center gap-1">
+                                  <DollarSign className="w-3 h-3" />
+                                  €{casting.pay.amount}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
-                      {/* Compact caption — only for non-featured cards */}
+                      {/* Compact caption — non-featured */}
                       {!isFeatured && (
                         <div className="p-1.5">
                           <h3 className="font-medium text-[10px] text-zinc-100 line-clamp-2 leading-tight">
@@ -404,7 +433,7 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
                   </motion.div>
                 )
               })}
-            </div>
+            </motion.div>
           ) : (
             <div className="text-center py-16 text-zinc-500">
               <p>No castings found</p>
