@@ -3,7 +3,7 @@
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { api } from "@/lib/api-client"
 import {
   Camera,
@@ -130,6 +130,10 @@ export function CreateStorySheet({ open, onClose, onCreated }: CreateStorySheetP
   return (
     <Sheet open={open} onOpenChange={(v) => !v && handleClose()}>
       <SheetContent side="bottom" className="h-[100dvh] p-0 rounded-none border-0 bg-black">
+        <SheetHeader className="sr-only">
+          <SheetTitle>Create Story</SheetTitle>
+          <SheetDescription>Upload a photo or video to share as a story</SheetDescription>
+        </SheetHeader>
         {/* Hidden file inputs */}
         <input
           ref={fileInputRef}
