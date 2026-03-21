@@ -7,9 +7,7 @@ import {
   setAuthCookies,
   generateUniqueUsername,
 } from "@/lib/auth"
-import { Role } from "@prisma/client"
-
-const VALID_ROLES: Role[] = [Role.MODEL, Role.AGENCY, Role.BRAND, Role.CLIENT]
+const VALID_ROLES = ["MODEL", "AGENCY", "BRAND", "CLIENT"] as const
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,10 +21,10 @@ export async function POST(request: NextRequest) {
     }
 
     const roleUpper = String(roleInput).toUpperCase()
-    if (!VALID_ROLES.includes(roleUpper as Role)) {
+    if (!VALID_ROLES.includes(roleUpper as any)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 })
     }
-    const role = roleUpper as Role
+    const role = roleUpper as string
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
@@ -69,17 +67,21 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (role === Role.MODEL) {
+    if (role === "MODEL") {
       await prisma.modelProfile.create({
         data: { userId: user.id },
       })
-    } else if (role === Role.AGENCY) {
+    } else if (role === "AGENCY") {
       await prisma.agencyProfile.create({
         data: { userId: user.id, agencyName: displayName },
       })
-    } else if (role === Role.BRAND) {
+    } else if (role === "BRAND") {
       await prisma.brandProfile.create({
         data: { userId: user.id, brandName: displayName },
+      })
+    } else if (role === "CLIENT") {
+      await prisma.clientProfile.create({
+        data: { userId: user.id, clientName: displayName },
       })
     }
 
@@ -87,6 +89,8 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       email: user.email,
       role: user.role.toLowerCase() as "model" | "agency" | "brand" | "client",
+      username: user.username,
+      displayName,
     })
     const refreshToken = await generateRefreshToken(user.id)
 
@@ -106,9 +110,17 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[v0] Signup error:", error)
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    return NextResponse.json({ error: `Internal server error: ${errorMessage}` }, { status: 500 })
+    console.error("Signup error:", error)
+    const message = error instanceof Error ? error.message : "Internal server error"
+    const isDbError = message.includes("connect") || message.includes("Can't reach") || message.includes("P1001")
+    return NextResponse.json(
+      {
+        error: isDbError
+          ? "Database unavailable. On Vercel: add a hosted Postgres (Neon/Vercel Postgres), set DATABASE_URL, and run migrations."
+          : "Internal server error",
+      },
+      { status: 500 }
+    )
   }
 }
 

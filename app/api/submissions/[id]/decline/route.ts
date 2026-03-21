@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
-import { v4 as uuidv4 } from "uuid"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -12,41 +11,42 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Get submission
-    const submission = await db`
-      SELECT s.*, c.creator_id, c.title as casting_title
-      FROM submissions s
-      JOIN castings c ON s.casting_id = c.id
-      WHERE s.id = ${submissionId}
-    `
+    const submission = await prisma.submission.findUnique({
+      where: { id: submissionId },
+      include: {
+        casting: { select: { createdBy: true, title: true } },
+      },
+    })
 
-    if (submission.length === 0) {
+    if (!submission) {
       return NextResponse.json({ error: "Submission not found" }, { status: 404 })
     }
 
-    // Verify user is the model
-    if (submission[0].model_id !== user.id) {
+    if (submission.modelId !== user.id) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 })
     }
 
-    // Can only decline if status is 'offered'
-    if (submission[0].status !== "offered") {
+    if (submission.status !== "OFFERED") {
       return NextResponse.json({ error: "Can only decline offers" }, { status: 400 })
     }
 
-    await db`
-      UPDATE submissions SET status = 'declined', updated_at = NOW() WHERE id = ${submissionId}
-    `
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: { status: "DECLINED" },
+    })
 
-    // Notify casting creator
-    await db`
-      INSERT INTO notifications (id, user_id, type, title, body, related_id, related_type)
-      VALUES (
-        ${uuidv4()}, ${submission[0].creator_id}, 'offer_declined',
-        'Offer Declined', ${`${user.displayName} declined your offer for "${submission[0].casting_title}"`},
-        ${submissionId}, 'submission'
-      )
-    `
+    await prisma.notification.create({
+      data: {
+        userId: submission.casting.createdBy,
+        type: "SYSTEM",
+        payload: {
+          title: "Offer Declined",
+          body: `${user.displayName} declined your offer for "${submission.casting.title}"`,
+          relatedId: submissionId,
+          relatedType: "submission",
+        },
+      },
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

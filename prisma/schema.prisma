@@ -95,28 +95,47 @@ model User {
   modelProfile        ModelProfile?
   agencyProfile       AgencyProfile?
   brandProfile        BrandProfile?
+  clientProfile       ClientProfile?
   refreshTokens       RefreshToken[]
   followers           Follow[]              @relation("followers")
   following           Follow[]              @relation("following")
+  agencyAppsAsModel   AgencyApplication[]   @relation("agencyApplicationsAsModel")
+  agencyAppsAsAgency  AgencyApplication[]   @relation("agencyApplicationsAsAgency")
+  availabilityDates   AvailabilityDate[]
   notifications       Notification[]
   conversationMembers ConversationMember[]
   messages            Message[]             @relation("sentMessages")
   castings            Casting[]             @relation("createdCastings")
   submissions         Submission[]          @relation("modelSubmissions")
   savedCastings       SavedCasting[]
+  savedModels         SavedModel[]          @relation("savedModelsByUser")
+  savedByUsers        SavedModel[]          @relation("savedModelsOfUser")
   mediaAssets         MediaAsset[]
   settings            UserSettings?
   posts               Post[]
   postLikes           PostLike[]
   postSaves           PostSave[]
   comments            Comment[]
+  blockedUsers        Block[]               @relation("blockerUser")
+  blockedByUsers      Block[]               @relation("blockedUser")
+  reportsCreated      Report[]              @relation("reportCreator")
+  reportsReceived     Report[]              @relation("reportTarget")
+  profileViews        ProfileView[]         @relation("profileViews")
+  profileViewsBy      ProfileView[]         @relation("profileViewsBy")
+  castingViewsBy      CastingView[]         @relation("castingViewsBy")
+  earnings            Earning[]             @relation("userEarnings")
+  stories             Story[]               @relation("userStories")
+  storyViewsBy        StoryView[]           @relation("storyViewsBy")
+  highlights          StoryHighlight[]      @relation("userHighlights")
+  brandBookings       DirectBooking[]       @relation("brandBookings")
+  modelBookings       DirectBooking[]       @relation("modelBookings")
 
   @@map("users")
 }
 
 model Profile {
-  userId             String            @id @map("user_id")
-  displayName        String            @map("display_name")
+  userId             String    @id @map("user_id")
+  displayName        String    @map("display_name")
   bio                String?
   location           String?
   height             String?
@@ -124,10 +143,11 @@ model Profile {
   eyes               String?
   experience         String?
   verificationStatus VerificationLevel @default(UNVERIFIED) @map("verification_status")
-  score              Int               @default(0)
-  avatarUrl          String?           @map("avatar_url")
-  coverUrl           String?           @map("cover_url")
-  updatedAt          DateTime?         @updatedAt @map("updated_at")
+  score              Int       @default(0)
+  avatarUrl          String?   @map("avatar_url")
+  coverUrl           String?   @map("cover_url")
+  socialLinks        Json?     @default("{}") @map("social_links")
+  updatedAt          DateTime? @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -170,10 +190,11 @@ model ModelProfile {
 }
 
 model AgencyProfile {
-  userId     String  @id @map("user_id")
-  agencyName String  @map("agency_name")
-  website    String?
-  verified   Boolean @default(false)
+  userId         String   @id
+  agencyName     String
+  website        String?
+  verified       Boolean  @default(false)
+  commissionRate Decimal? @default(20.00) @map("commission_rate")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -189,6 +210,48 @@ model BrandProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("brand_profiles")
+}
+
+model ClientProfile {
+  userId     String  @id
+  clientName String
+  website    String?
+  industry   String?
+  verified   Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("client_profiles")
+}
+
+model AgencyApplication {
+  id        String   @id @default(uuid())
+  modelId   String
+  agencyId  String
+  status    String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  model  User @relation("agencyApplicationsAsModel", fields: [modelId], references: [id], onDelete: Cascade)
+  agency User @relation("agencyApplicationsAsAgency", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, agencyId])
+  @@index([agencyId, status])
+  @@map("agency_applications")
+}
+
+model AvailabilityDate {
+  id     String   @id @default(uuid())
+  userId String
+  date   DateTime
+  status String   @default("AVAILABLE") // AVAILABLE, HOLD, BOOKED
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@map("availability_dates")
 }
 
 model Follow {
@@ -226,6 +289,9 @@ model Casting {
   submissions    Submission[]
   savedBy        SavedCasting[]
   rooms          Conversation[] @relation("castingRooms")
+  views          CastingView[]
+  earnings       Earning[]
+  budget         Int?
   creator        User           @relation("createdCastings", fields: [createdBy], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -287,11 +353,59 @@ model Conversation {
   castingId String?  @map("casting_id")
   createdAt DateTime @default(now()) @map("created_at")
 
-  members  ConversationMember[]
-  messages Message[]
-  casting  Casting?             @relation("castingRooms", fields: [castingId], references: [id], onDelete: SetNull)
+  members       ConversationMember[]
+  messages      Message[]
+  casting       Casting?             @relation("castingRooms", fields: [castingId], references: [id], onDelete: SetNull)
+  roomEvents    RoomEvent[]
+  roomFiles     RoomFile[]
+  roomSchedules RoomScheduleItem[]
 
   @@map("conversations")
+}
+
+model RoomEvent {
+  id           String   @id @default(uuid())
+  roomId       String
+  type         String   // "created" | "submission" | "shortlisted" | "offer_sent" | "offer_accepted" | "member_added" | "message"
+  userId       String
+  targetUserId String?
+  message      String?
+  createdAt    DateTime @default(now())
+
+  room Conversation @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+  @@map("room_events")
+}
+
+model RoomFile {
+  id         String   @id @default(uuid())
+  roomId     String
+  name       String
+  type       String   // "moodboard" | "callsheet" | "contract" | "other"
+  url        String
+  uploadedBy String
+  createdAt  DateTime @default(now())
+
+  room Conversation @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@map("room_files")
+}
+
+model RoomScheduleItem {
+  id       String   @id @default(uuid())
+  roomId   String
+  title    String
+  date     DateTime
+  time     String
+  location String?
+  notes    String?
+
+  room Conversation @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@map("room_schedule_items")
 }
 
 model ConversationMember {
@@ -429,4 +543,169 @@ model Comment {
 
   @@index([postId])
   @@map("comments")
+}
+
+model Block {
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker User @relation("blockerUser", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("blockedUser", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("blocks")
+}
+
+model Report {
+  id        String   @id @default(uuid())
+  reporterId String
+  targetId   String
+  reason     String   // "spam" | "harassment" | "inappropriate" | "fake" | "other"
+  details    String?
+  status     String   @default("PENDING") // PENDING, REVIEWED, RESOLVED, DISMISSED
+  createdAt  DateTime @default(now())
+
+  reporter User @relation("reportCreator", fields: [reporterId], references: [id], onDelete: Cascade)
+  target   User @relation("reportTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([targetId, status])
+  @@map("reports")
+}
+
+model SavedModel {
+  userId  String
+  modelId String
+  note    String?
+  createdAt DateTime @default(now())
+
+  user  User @relation("savedModelsByUser", fields: [userId], references: [id], onDelete: Cascade)
+  model User @relation("savedModelsOfUser", fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@id([userId, modelId])
+  @@index([modelId])
+  @@map("saved_models")
+}
+
+// ─── Phase 3: Growth Features ───
+
+model ProfileView {
+  id        String   @id @default(uuid())
+  profileId String
+  viewerId  String?
+  source    String?  // "discover" | "casting" | "search" | "direct"
+  createdAt DateTime @default(now())
+
+  profile User @relation("profileViews", fields: [profileId], references: [id], onDelete: Cascade)
+  viewer  User? @relation("profileViewsBy", fields: [viewerId], references: [id], onDelete: SetNull)
+
+  @@index([profileId, createdAt])
+  @@index([viewerId])
+  @@map("profile_views")
+}
+
+model CastingView {
+  id        String   @id @default(uuid())
+  castingId String
+  viewerId  String?
+  createdAt DateTime @default(now())
+
+  casting Casting @relation(fields: [castingId], references: [id], onDelete: Cascade)
+  viewer  User?   @relation("castingViewsBy", fields: [viewerId], references: [id], onDelete: SetNull)
+
+  @@index([castingId, createdAt])
+  @@index([viewerId])
+  @@map("casting_views")
+}
+
+model Earning {
+  id          String   @id @default(uuid())
+  userId      String
+  castingId   String?
+  amount      Int      // in cents
+  currency    String   @default("EUR")
+  description String?
+  status      String   @default("PENDING") // PENDING, PAID, CANCELLED
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  user    User     @relation("userEarnings", fields: [userId], references: [id], onDelete: Cascade)
+  casting Casting? @relation(fields: [castingId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([castingId])
+  @@map("earnings")
+}
+
+model Story {
+  id          String    @id @default(uuid())
+  userId      String
+  mediaUrl    String
+  mediaType   String    @default("image") // "image" | "video"
+  caption     String?
+  expiresAt   DateTime
+  viewCount   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  highlightId String?
+
+  user      User            @relation("userStories", fields: [userId], references: [id], onDelete: Cascade)
+  highlight StoryHighlight? @relation(fields: [highlightId], references: [id], onDelete: SetNull)
+  views     StoryView[]
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("stories")
+}
+
+model StoryView {
+  storyId  String
+  viewerId String
+  viewedAt DateTime @default(now())
+
+  story  Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  viewer User  @relation("storyViewsBy", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@id([storyId, viewerId])
+  @@map("story_views")
+}
+
+model StoryHighlight {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  coverUrl  String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user    User    @relation("userHighlights", fields: [userId], references: [id], onDelete: Cascade)
+  stories Story[]
+
+  @@index([userId, sortOrder])
+  @@map("story_highlights")
+}
+
+// ─── Direct Bookings ───
+
+model DirectBooking {
+  id          String    @id @default(uuid())
+  brandId     String    @map("brand_id")
+  modelId     String    @map("model_id")
+  title       String
+  description String?
+  location    String?
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  payAmount   Int?      @map("pay_amount")
+  payCurrency String    @default("EUR") @map("pay_currency")
+  status      String    @default("PENDING")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  brand User @relation("brandBookings", fields: [brandId], references: [id], onDelete: Cascade)
+  model User @relation("modelBookings", fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+  @@index([modelId])
+  @@map("direct_bookings")
 }

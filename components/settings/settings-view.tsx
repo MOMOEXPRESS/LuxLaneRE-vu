@@ -27,6 +27,7 @@ import { useTheme } from "@/lib/theme-context"
 import { useStore } from "@/lib/store-context"
 import { useSettings } from "@/lib/hooks/use-settings"
 import type { UserRole, VerificationLevel } from "@/lib/types"
+import { ModerationDashboard } from "@/components/admin/moderation-dashboard"
 
 interface SettingsViewProps {
   onBack: () => void
@@ -34,7 +35,7 @@ interface SettingsViewProps {
   onOpenDigitalTwin?: () => void
 }
 
-type SettingsSection = "main" | "account" | "notifications" | "privacy" | "help" | "dev"
+type SettingsSection = "main" | "account" | "notifications" | "privacy" | "help" | "dev" | "moderation"
 
 export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: SettingsViewProps) {
   const { user, logout, updateUser } = useAuth()
@@ -172,6 +173,7 @@ export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: 
           {section === "privacy" && "Privacy"}
           {section === "help" && "Help"}
           {section === "dev" && "Dev Panel"}
+          {section === "moderation" && "Moderation"}
         </h1>
       </header>
 
@@ -273,6 +275,23 @@ export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: 
               )
             })}
           </div>
+
+          {/* Moderation (brand/agency only) */}
+          {(user?.role === "brand" || user?.role === "agency") && (
+            <div className="mt-6">
+              <button
+                onClick={() => setSection("moderation")}
+                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <Shield className="h-5 w-5 text-muted-foreground" />
+                <div className="flex-1 text-left">
+                  <div className="font-medium text-sm">Moderation</div>
+                  <div className="text-xs text-muted-foreground">Review user reports</div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+          )}
 
           {/* Appearance */}
           <div className="mt-8">
@@ -554,16 +573,18 @@ export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: 
             <span className="text-sm">Contact Support</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </button>
-          <button className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
+          <a href="/terms" className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
             <span className="text-sm">Terms of Service</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </button>
-          <button className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
+          </a>
+          <a href="/privacy" className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
             <span className="text-sm">Privacy Policy</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </button>
+          </a>
         </div>
       )}
+
+      {section === "moderation" && <ModerationDashboard />}
     </div>
   )
 }

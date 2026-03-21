@@ -50,11 +50,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         userId: casting.createdBy,
         type: "SYSTEM",
         payload: {
-          type: "new_application",
-          submissionId: submission.id,
+          title: "New application received",
+          message: `${user.displayName || user.username} applied to "${casting.title}"`,
           castingId,
-          castingTitle: casting.title,
-          modelDisplayName: user.displayName,
+          submissionId: submission.id,
         },
       },
     })

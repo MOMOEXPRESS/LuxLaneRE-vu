@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
-import { v4 as uuidv4 } from "uuid"
+// Enum values matching Prisma schema
+const SubmissionStatusValues = ["APPLIED", "SUBMITTED", "SHORTLISTED", "OFFERED", "ACCEPTED", "DECLINED", "CONFIRMED", "REJECTED"] as const
+type SubmissionStatus = (typeof SubmissionStatusValues)[number]
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -12,72 +14,72 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Get submission with casting info
-    const submission = await db`
-      SELECT s.*, c.creator_id, c.title as casting_title
-      FROM submissions s
-      JOIN castings c ON s.casting_id = c.id
-      WHERE s.id = ${submissionId}
-    `
+    const submission = await prisma.submission.findUnique({
+      where: { id: submissionId },
+      include: {
+        casting: { select: { createdBy: true, title: true } },
+      },
+    })
 
-    if (submission.length === 0) {
+    if (!submission) {
       return NextResponse.json({ error: "Submission not found" }, { status: 404 })
     }
 
-    // Verify user is the casting creator
-    if (submission[0].creator_id !== user.id) {
+    if (submission.casting.createdBy !== user.id) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 })
     }
 
     const body = await request.json()
     const { status } = body
 
-    const validStatuses = [
-      "applied",
-      "submitted",
-      "shortlisted",
-      "offered",
-      "accepted",
-      "declined",
-      "confirmed",
-      "rejected",
-    ]
-    if (!validStatuses.includes(status)) {
+    if (!SubmissionStatusValues.includes(status.toUpperCase() as SubmissionStatus)) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 })
     }
 
-    await db`
-      UPDATE submissions SET status = ${status}, updated_at = NOW() WHERE id = ${submissionId}
-    `
+    const newStatus = status.toUpperCase() as SubmissionStatus
+
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: { status: newStatus },
+    })
 
     // Create notification for the model
+    let notificationType: string | null = null
     let notificationTitle = ""
     let notificationBody = ""
-    let notificationType = ""
 
-    if (status === "shortlisted") {
-      notificationType = "shortlisted"
+    if (newStatus === "SHORTLISTED") {
+      notificationType = "SHORTLISTED"
       notificationTitle = "You've been shortlisted!"
-      notificationBody = `You've been shortlisted for "${submission[0].casting_title}"`
-    } else if (status === "offered") {
-      notificationType = "offer_received"
+      notificationBody = `You've been shortlisted for "${submission.casting.title}"`
+    } else if (newStatus === "OFFERED") {
+      notificationType = "OFFER"
       notificationTitle = "You received an offer!"
-      notificationBody = `You've been offered a spot in "${submission[0].casting_title}"`
-    } else if (status === "rejected") {
-      notificationType = "application_update"
+      notificationBody = `You've been offered a spot in "${submission.casting.title}"`
+    } else if (newStatus === "CONFIRMED") {
+      notificationType = "CONFIRMED"
+      notificationTitle = "You're confirmed!"
+      notificationBody = `Your booking for "${submission.casting.title}" has been confirmed`
+    } else if (newStatus === "REJECTED") {
+      notificationType = "SYSTEM"
       notificationTitle = "Application Update"
-      notificationBody = `Your application for "${submission[0].casting_title}" was not selected`
+      notificationBody = `Your application for "${submission.casting.title}" was not selected`
     }
 
     if (notificationType) {
-      await db`
-        INSERT INTO notifications (id, user_id, type, title, body, related_id, related_type)
-        VALUES (
-          ${uuidv4()}, ${submission[0].model_id}, ${notificationType},
-          ${notificationTitle}, ${notificationBody},
-          ${submissionId}, 'submission'
-        )
-      `
+      await prisma.notification.create({
+        data: {
+          userId: submission.modelId,
+          type: notificationType,
+          payload: {
+            title: notificationTitle,
+            message: notificationBody,
+            castingId: submission.castingId,
+            relatedId: submissionId,
+            relatedType: "submission",
+          },
+        },
+      })
     }
 
     return NextResponse.json({ success: true })

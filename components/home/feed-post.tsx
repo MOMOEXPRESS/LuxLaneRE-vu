@@ -32,16 +32,41 @@ interface FeedPostProps {
   refreshFeed?: () => void
 }
 
+interface CommentItem {
+  id: string
+  user: { name: string; username: string; avatar: string }
+  body: string
+  createdAt: string
+}
+
 export function FeedPost({ post, onUserClick, onLike, onSave, refreshFeed }: FeedPostProps) {
   const [liked, setLiked] = useState(post.likedByMe ?? false)
   const [saved, setSaved] = useState(post.savedByMe ?? false)
   const [likeCount, setLikeCount] = useState(post.likes)
+  const [showCommentsSheet, setShowCommentsSheet] = useState(false)
+  const [comments, setComments] = useState<CommentItem[]>([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentInput, setCommentInput] = useState("")
+  const [commentSending, setCommentSending] = useState(false)
+
+  const loadComments = useCallback(async () => {
+    setCommentsLoading(true)
+    const res = await api.getComments(post.id)
+    if (!res.error && Array.isArray(res.data)) {
+      setComments(res.data as CommentItem[])
+    }
+    setCommentsLoading(false)
+  }, [post.id])
 
   useEffect(() => {
     setLiked(post.likedByMe ?? false)
     setSaved(post.savedByMe ?? false)
     setLikeCount(post.likes)
   }, [post.id, post.likedByMe, post.savedByMe, post.likes])
+
+  useEffect(() => {
+    if (showCommentsSheet) loadComments()
+  }, [showCommentsSheet, loadComments])
 
   const handleLike = () => {
     if (onLike) {

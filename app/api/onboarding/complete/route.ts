@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
@@ -11,62 +11,109 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
-    // Update base profile fields
+    // Update or create base profile
     if (body.displayName || body.bio || body.location) {
-      await db`
-        UPDATE users SET
-          display_name = COALESCE(${body.displayName}, display_name),
-          bio = COALESCE(${body.bio}, bio),
-          location = COALESCE(${body.location}, location),
-          updated_at = NOW()
-        WHERE id = ${user.id}
-      `
+      await prisma.profile.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          displayName: body.displayName || user.username,
+          bio: body.bio || null,
+          location: body.location || null,
+        },
+        update: {
+          ...(body.displayName !== undefined && { displayName: body.displayName }),
+          ...(body.bio !== undefined && { bio: body.bio }),
+          ...(body.location !== undefined && { location: body.location }),
+        },
+      })
     }
 
     // Update role-specific profile
     if (user.role === "model" && body.modelProfile) {
       const mp = body.modelProfile
-      await db`
-        UPDATE model_profiles SET
-          height_cm = COALESCE(${mp.heightCm}, height_cm),
-          bust_cm = COALESCE(${mp.bustCm}, bust_cm),
-          waist_cm = COALESCE(${mp.waistCm}, waist_cm),
-          hips_cm = COALESCE(${mp.hipsCm}, hips_cm),
-          shoe_size = COALESCE(${mp.shoeSize}, shoe_size),
-          eye_color = COALESCE(${mp.eyeColor}, eye_color),
-          hair_color = COALESCE(${mp.hairColor}, hair_color),
-          date_of_birth = COALESCE(${mp.dateOfBirth}, date_of_birth),
-          gender = COALESCE(${mp.gender}, gender),
-          experience_tags = COALESCE(${mp.experienceTags}, experience_tags),
-          updated_at = NOW()
-        WHERE user_id = ${user.id}
-      `
+      await prisma.modelProfile.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          heightCm: mp.heightCm || null,
+          bustCm: mp.bustCm || null,
+          waistCm: mp.waistCm || null,
+          hipsCm: mp.hipsCm || null,
+          shoeSize: mp.shoeSize || null,
+          eyes: mp.eyeColor || null,
+          hair: mp.hairColor || null,
+          languages: mp.languages || [],
+        },
+        update: {
+          ...(mp.heightCm !== undefined && { heightCm: mp.heightCm }),
+          ...(mp.bustCm !== undefined && { bustCm: mp.bustCm }),
+          ...(mp.waistCm !== undefined && { waistCm: mp.waistCm }),
+          ...(mp.hipsCm !== undefined && { hipsCm: mp.hipsCm }),
+          ...(mp.shoeSize !== undefined && { shoeSize: mp.shoeSize }),
+          ...(mp.eyeColor !== undefined && { eyes: mp.eyeColor }),
+          ...(mp.hairColor !== undefined && { hair: mp.hairColor }),
+          ...(mp.languages !== undefined && { languages: mp.languages }),
+        },
+      })
+
+      // Store experience tags and social links in the details JSON field
+      if (mp.experienceTags || mp.socialLinks) {
+        await prisma.modelProfile.update({
+          where: { userId: user.id },
+          data: {
+            details: {
+              experienceTags: mp.experienceTags || [],
+              socialLinks: mp.socialLinks || {},
+            },
+          },
+        })
+      }
     } else if (user.role === "agency" && body.agencyProfile) {
       const ap = body.agencyProfile
-      await db`
-        UPDATE agency_profiles SET
-          agency_name = COALESCE(${ap.agencyName}, agency_name),
-          founded_year = COALESCE(${ap.foundedYear}, founded_year),
-          specialties = COALESCE(${ap.specialties}, specialties),
-          updated_at = NOW()
-        WHERE user_id = ${user.id}
-      `
+      await prisma.agencyProfile.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          agencyName: ap.agencyName || user.username,
+          website: ap.website || null,
+        },
+        update: {
+          ...(ap.agencyName !== undefined && { agencyName: ap.agencyName }),
+          ...(ap.website !== undefined && { website: ap.website }),
+        },
+      })
     } else if (user.role === "brand" && body.brandProfile) {
       const bp = body.brandProfile
-      await db`
-        UPDATE brand_profiles SET
-          brand_name = COALESCE(${bp.brandName}, brand_name),
-          industry = COALESCE(${bp.industry}, industry),
-          company_size = COALESCE(${bp.companySize}, company_size),
-          updated_at = NOW()
-        WHERE user_id = ${user.id}
-      `
+      await prisma.brandProfile.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          brandName: bp.brandName || user.username,
+          website: bp.website || null,
+        },
+        update: {
+          ...(bp.brandName !== undefined && { brandName: bp.brandName }),
+          ...(bp.website !== undefined && { website: bp.website }),
+        },
+      })
+    } else if (user.role === "client" && body.clientProfile) {
+      const cp = body.clientProfile
+      await prisma.clientProfile.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          clientName: cp.clientName || user.username,
+          website: cp.website || null,
+          industry: cp.industry || null,
+        },
+        update: {
+          ...(cp.clientName !== undefined && { clientName: cp.clientName }),
+          ...(cp.website !== undefined && { website: cp.website }),
+          ...(cp.industry !== undefined && { industry: cp.industry }),
+        },
+      })
     }
-
-    // Mark onboarding as complete
-    await db`
-      UPDATE users SET onboarding_complete = true, updated_at = NOW() WHERE id = ${user.id}
-    `
 
     return NextResponse.json({ success: true })
   } catch (error) {

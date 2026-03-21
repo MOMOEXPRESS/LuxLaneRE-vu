@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api-client"
 import { useNavigation } from "@/lib/navigation-context"
@@ -24,7 +24,7 @@ import { CreateTwinFlow } from "@/components/digital-twin/create-twin-flow"
 import { CompareView } from "@/components/compare/compare-view"
 import { CastingRoomView } from "@/components/casting-room/casting-room"
 import { BrandDashboard } from "@/components/brand/brand-dashboard"
-import { mockConversations, getRoomByCastingId } from "@/lib/mock-data"
+import type { CastingRoom } from "@/lib/types"
 
 function useViewProfile() {
   const router = useRouter()
@@ -46,13 +46,25 @@ export default function Home() {
     goBack,
   } = useNavigation()
 
+  const [unreadCount, setUnreadCount] = useState(0)
+
   useEffect(() => {
     if (typeof window === "undefined") return
     const params = new URLSearchParams(window.location.search)
     if (params.get("tab") === "inbox") setActiveTab("inbox")
   }, [setActiveTab])
 
-  const unreadCount = mockConversations.reduce((acc, c) => acc + c.unreadCount, 0)
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const fetchUnread = async () => {
+      const res = await api.getNotifications(true) // unread only
+      const data = res.data as { notifications?: Array<unknown> } | undefined
+      setUnreadCount(data?.notifications?.length || 0)
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 30000) // poll every 30s
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
   const isBrandOrAgency = user?.role === "brand" || user?.role === "agency"
 
   if (!isAuthenticated) {
@@ -128,7 +140,75 @@ export default function Home() {
 
   // Casting detail view - with persistent nav
   if (currentView === "casting" && selectedCasting) {
-    const room = getRoomByCastingId(selectedCasting.id)
+    const handleOpenRoom = async () => {
+      const res = await api.getCastingRoom(selectedCasting.id)
+      const data = res.data as { room?: { id: string; castingId: string; status: string; createdAt: string; casting: Record<string, unknown>; members: Array<Record<string, unknown>> } } | undefined
+      if (data?.room) {
+        const room: CastingRoom = {
+          id: data.room.id,
+          castingId: data.room.castingId,
+          casting: selectedCasting,
+          status: data.room.status as CastingRoom["status"],
+          members: data.room.members.map((m: Record<string, unknown>) => ({
+            id: m.id as string,
+            email: "",
+            name: (m.name as string) || "",
+            username: (m.username as string) || "",
+            role: ((m.role as string) || "model") as User["role"],
+            verified: false,
+            verificationLevel: "unverified" as const,
+            avatar: (m.avatar as string) || "",
+            bio: "",
+            location: (m.location as string) || "",
+            followers: 0,
+            following: 0,
+            createdAt: new Date(),
+            portfolio: [],
+            polaroids: [],
+            experience: [],
+            tags: [],
+          })),
+          createdAt: new Date(data.room.createdAt),
+          updatedAt: new Date(data.room.createdAt),
+        }
+        navigateTo("casting-room", { room, casting: selectedCasting })
+      } else {
+        // Create room if it doesn't exist (for casting creator)
+        const createRes = await api.createCastingRoom(selectedCasting.id)
+        const createData = createRes.data as { room?: { id: string; castingId: string; status: string; createdAt: string; members: Array<Record<string, unknown>> } } | undefined
+        if (createData?.room) {
+          const room: CastingRoom = {
+            id: createData.room.id,
+            castingId: createData.room.castingId,
+            casting: selectedCasting,
+            status: createData.room.status as CastingRoom["status"],
+            members: createData.room.members.map((m: Record<string, unknown>) => ({
+              id: m.id as string,
+              email: "",
+              name: (m.name as string) || "",
+              username: (m.username as string) || "",
+              role: ((m.role as string) || "model") as User["role"],
+              verified: false,
+              verificationLevel: "unverified" as const,
+              avatar: (m.avatar as string) || "",
+              bio: "",
+              location: (m.location as string) || "",
+              followers: 0,
+              following: 0,
+              createdAt: new Date(),
+              portfolio: [],
+              polaroids: [],
+              experience: [],
+              tags: [],
+            })),
+            createdAt: new Date(createData.room.createdAt),
+            updatedAt: new Date(createData.room.createdAt),
+          }
+          navigateTo("casting-room", { room, casting: selectedCasting })
+        }
+      }
+    }
+    const isCreator = selectedCasting.creatorId === user?.id
     return (
       <div className="min-h-screen bg-background">
         <Header
@@ -143,7 +223,7 @@ export default function Home() {
           onBack={goBack}
           onViewProfile={viewProfile}
           onViewCasting={(c) => navigateTo("casting", { casting: c })}
-          onOpenRoom={room ? () => navigateTo("casting-room", { room, casting: selectedCasting }) : undefined}
+          onOpenRoom={isCreator ? handleOpenRoom : undefined}
         />
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />
       </div>
