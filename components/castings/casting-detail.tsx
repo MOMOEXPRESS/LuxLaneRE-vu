@@ -825,15 +825,15 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                       </div>
                       <div>
                         <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Height</p>
-                        <p className="text-sm font-medium">{user?.height || "Not set"}</p>
+                        <p className="text-sm font-medium">{user?.measurements?.height || "Not set"}</p>
                       </div>
                       <div>
                         <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Hair</p>
-                        <p className="text-sm font-medium">{user?.hair || "Not set"}</p>
+                        <p className="text-sm font-medium">{user?.measurements?.hairColor || "Not set"}</p>
                       </div>
                       <div>
                         <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Eyes</p>
-                        <p className="text-sm font-medium">{user?.eyes || "Not set"}</p>
+                        <p className="text-sm font-medium">{user?.measurements?.eyeColor || "Not set"}</p>
                       </div>
                     </div>
 
@@ -953,7 +953,7 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                         <DollarSign className="w-5 h-5 text-muted-foreground" />
                         <div>
                           <p className="font-medium">
-                            €{casting.pay.amount}/{casting.pay.period}
+                            €{casting.pay.amount}/{casting.pay.type}
                           </p>
                         </div>
                       </div>

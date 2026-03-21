@@ -164,7 +164,7 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <DollarSign className="w-3 h-3 shrink-0" />
-                        <span>{casting.pay ? `€${casting.pay.amount}/${casting.pay.period}` : "TBD"}</span>
+                        <span>{casting.pay ? `€${casting.pay.amount}/${casting.pay.type}` : "TBD"}</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Calendar className="w-3 h-3 shrink-0" />
@@ -200,7 +200,7 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
         {postsLoading ? (
           <div className="py-12 text-center text-muted-foreground text-sm">Loading feed…</div>
         ) : feedPosts.length > 0 ? (
-          feedPosts.map((post) => (
+          feedPosts.map((post: any) => (
             <FeedPost
               key={post.id}
               post={post}
