@@ -78,12 +78,18 @@ enum TwinStatus {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  username     String   @unique
-  passwordHash String
-  role         Role
-  createdAt    DateTime @default(now())
+  id              String    @id @default(uuid())
+  email           String    @unique
+  username        String    @unique
+  passwordHash    String    @map("password_hash")
+  displayName     String    @map("display_name")
+  role            Role
+  bio             String?
+  locationCity    String?   @map("location_city")
+  avatarUrl       String?   @map("avatar_url")
+  onboardingComplete Boolean? @default(false) @map("onboarding_complete")
+  createdAt       DateTime? @default(now()) @map("created_at")
+  updatedAt       DateTime? @updatedAt @map("updated_at")
 
   profile             Profile?
   modelProfile        ModelProfile?

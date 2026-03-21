@@ -12,9 +12,11 @@ const VALID_ROLES = ["MODEL", "AGENCY", "BRAND", "CLIENT"] as const
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    console.log("[v0] Signup request body:", { ...body, password: "***" })
     const { email, password, displayName, role: roleInput, username: usernameInput } = body
 
     if (!email || !password || !displayName || !roleInput) {
+      console.log("[v0] Missing required fields:", { email: !!email, password: !!password, displayName: !!displayName, roleInput: !!roleInput })
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
@@ -52,10 +54,12 @@ export async function POST(request: NextRequest) {
         email: normalizedEmail,
         username,
         passwordHash,
+        displayName,
         role,
       },
     })
 
+    // Create profile record
     await prisma.profile.create({
       data: {
         userId: user.id,

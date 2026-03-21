@@ -100,7 +100,8 @@ export async function POST(request: NextRequest) {
     const authUser = mockUserToAuthUser(mockUser)
     return NextResponse.json({ success: true, user: authUser })
   } catch (error) {
-    console.error("Login error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[v0] Login error:", error instanceof Error ? error.message : error)
+    console.error("[v0] Login error stack:", error instanceof Error ? error.stack : "no stack")
+    return NextResponse.json({ error: `Internal server error: ${error instanceof Error ? error.message : "unknown"}` }, { status: 500 })
   }
 }
