@@ -74,10 +74,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           userId: casting.createdBy,
           type: "SYSTEM",
           payload: {
-            title: "New Submission",
-            body: `Agency submitted ${submissions.length} model(s) to "${casting.title}"`,
-            relatedId: castingId,
-            relatedType: "casting",
+            title: "New application received",
+            message: `${user.displayName || user.username} submitted ${submissions.length} model(s) to "${casting.title}"`,
+            castingId,
           },
         },
       })

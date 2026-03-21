@@ -12,7 +12,7 @@ import { useConversations, useMessages } from "@/lib/hooks/use-conversations"
 import { api } from "@/lib/api-client"
 import type { User as UserType } from "@/lib/types"
 import { useStore } from "@/lib/store-context"
-import type { Conversation, Message, JobOffer, Notification } from "@/lib/types"
+import type { Conversation, Message, JobOffer, Notification, CastingApplication } from "@/lib/types"
 import {
   ArrowLeft,
   Send,
@@ -26,10 +26,11 @@ import {
   MessageSquare,
   UserPlus,
   CheckCircle,
+  CalendarCheck,
 } from "lucide-react"
 import { formatDistanceToNow, format, isToday, isYesterday } from "date-fns"
 
-type InboxTab = "messages" | "notifications"
+type InboxTab = "messages" | "bookings" | "notifications"
 
 interface InboxViewProps {
   onViewProfile?: (user: import("@/lib/types").User) => void
@@ -109,6 +110,10 @@ export function InboxView({ onViewProfile }: InboxViewProps = {}) {
   const unreadCount = user ? getUnreadNotificationsCount(user.id) : 0
   const offers = user ? getOffersForModel(user.id) : []
   const pendingOffers = user ? getPendingOffersForModel(user.id) : []
+  const modelApplications = user ? getApplicationsForModel(user.id) : []
+  const bookingApplications = modelApplications.filter(
+    (a) => a.status === "accepted" || a.status === "shortlisted"
+  )
 
   if (selectedConversation) {
     return (
@@ -140,6 +145,21 @@ export function InboxView({ onViewProfile }: InboxViewProps = {}) {
           Messages
         </button>
         <button
+          onClick={() => setActiveTab("bookings")}
+          className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors relative ${
+            activeTab === "bookings"
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground"
+          }`}
+        >
+          Bookings
+          {bookingApplications.length > 0 && (
+            <span className="absolute top-2 ml-1 px-1.5 py-0.5 text-[10px] bg-foreground text-background rounded-full">
+              {bookingApplications.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab("notifications")}
           className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors relative ${
             activeTab === "notifications"
@@ -157,13 +177,13 @@ export function InboxView({ onViewProfile }: InboxViewProps = {}) {
       </div>
 
       <AnimatePresence mode="wait">
-        {activeTab === "messages" ? (
+        {activeTab === "messages" && (
           <motion.div key="messages" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             {conversationsLoading ? (
               <div className="text-center py-12 text-muted-foreground">Loading…</div>
             ) : conversations.length > 0 ? (
               <div className="divide-y divide-border">
-                {conversations.map((conversation) => (
+                {conversations.map((conversation: any) => (
                   <ConversationItem
                     key={conversation.id}
                     conversation={conversation}
@@ -179,7 +199,33 @@ export function InboxView({ onViewProfile }: InboxViewProps = {}) {
               </div>
             )}
           </motion.div>
-        ) : (
+        )}
+
+        {activeTab === "bookings" && (
+          <motion.div
+            key="bookings"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="p-4 space-y-3"
+          >
+            {bookingApplications.length > 0 ? (
+              <div className="space-y-3">
+                {bookingApplications.map((application) => (
+                  <BookingCard key={application.id} application={application} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                <CalendarCheck className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No bookings yet</p>
+                <p className="text-xs mt-1">Accepted casting applications will appear here</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {activeTab === "notifications" && (
           <motion.div
             key="notifications"
             initial={{ opacity: 0 }}
@@ -474,6 +520,51 @@ function ChatView({
         </div>
       </div>
     </div>
+  )
+}
+
+function BookingCard({ application }: { application: CastingApplication }) {
+  const statusColors: Record<string, string> = {
+    accepted: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+    shortlisted: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  }
+
+  const statusLabels: Record<string, string> = {
+    accepted: "Confirmed",
+    shortlisted: "Shortlisted",
+  }
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-sm truncate">
+            {application.casting?.title || "Casting"}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {application.casting?.creator?.name || "Brand"}
+          </p>
+        </div>
+        <Badge variant="outline" className={statusColors[application.status] || ""}>
+          {application.status === "accepted" && <CheckCircle className="w-3 h-3 mr-1" />}
+          {application.status === "shortlisted" && <Star className="w-3 h-3 mr-1" />}
+          {statusLabels[application.status] || application.status}
+        </Badge>
+      </div>
+      {application.casting?.location && (
+        <p className="text-xs text-muted-foreground">
+          {application.casting.location}
+        </p>
+      )}
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>Applied {formatDistanceToNow(application.submittedAt, { addSuffix: true })}</span>
+        {application.casting?.pay && (
+          <span className="font-medium text-foreground">
+            {application.casting.pay.amount.toLocaleString()} {application.casting.pay.currency}
+          </span>
+        )}
+      </div>
+    </Card>
   )
 }
 

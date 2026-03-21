@@ -37,6 +37,7 @@ export interface User {
   website?: string
   roster?: string[]
   industry?: string
+  socialLinks?: { instagram?: string; tiktok?: string }
 }
 
 export interface ModelMeasurements {

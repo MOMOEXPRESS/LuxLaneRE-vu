@@ -56,6 +56,19 @@ export async function POST(request: NextRequest) {
           ...(mp.languages !== undefined && { languages: mp.languages }),
         },
       })
+
+      // Store experience tags and social links in the details JSON field
+      if (mp.experienceTags || mp.socialLinks) {
+        await prisma.modelProfile.update({
+          where: { userId: user.id },
+          data: {
+            details: {
+              experienceTags: mp.experienceTags || [],
+              socialLinks: mp.socialLinks || {},
+            },
+          },
+        })
+      }
     } else if (user.role === "agency" && body.agencyProfile) {
       const ap = body.agencyProfile
       await prisma.agencyProfile.upsert({

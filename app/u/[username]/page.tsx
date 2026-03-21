@@ -77,9 +77,22 @@ function enrichDigitalTwin(profile: Record<string, unknown>): User["digitalTwin"
   return undefined
 }
 
+function extractSocialLinks(profile: Record<string, unknown>): { instagram?: string; tiktok?: string } | undefined {
+  // Try modelProfile details first
+  const modelProfile = profile.modelProfile as Record<string, unknown> | undefined
+  if (modelProfile?.details) {
+    const details = modelProfile.details as Record<string, unknown>
+    if (details.socialLinks) return details.socialLinks as { instagram?: string; tiktok?: string }
+  }
+  // Try top-level socialLinks
+  if (profile.socialLinks) return profile.socialLinks as { instagram?: string; tiktok?: string }
+  return undefined
+}
+
 function profileToUser(profile: Record<string, unknown>): User {
   const portfolioArr = profile.portfolio as Array<{ url?: string }> | undefined
   const portfolioUrls = Array.isArray(portfolioArr) ? portfolioArr.map((p) => (p && typeof p === "object" && "url" in p ? p.url : "")).filter(Boolean) : undefined
+  const socialLinks = extractSocialLinks(profile)
   return {
     id: (profile.id as string) ?? "",
     email: (profile.email as string) ?? "",
@@ -97,7 +110,7 @@ function profileToUser(profile: Record<string, unknown>): User {
     createdAt: new Date((profile.createdAt as string) ?? Date.now()),
     digitalTwin: enrichDigitalTwin(profile),
     metrics: profile.score != null ? { luxlaneScore: profile.score as number, rank: 0, rankTier: "new", trend: "stable", trendChange: 0, components: { bookings: 0, shortlists: 0, profileViews: 0, responseRate: 0, reliability: 0 }, achievements: [], lastUpdated: new Date() } : undefined,
-    portfolio: portfolioUrls,
+    portfolio: portfolioUrls?.filter((u: string | undefined): u is string => !!u),
     posts: (profile.posts as User["posts"]) ?? undefined,
     measurements: profile.measurements as User["measurements"],
     languages: profile.languages as string[] | undefined,
@@ -109,6 +122,7 @@ function profileToUser(profile: Record<string, unknown>): User {
     companyName: profile.companyName as string | undefined,
     website: profile.website as string | undefined,
     industry: profile.industry as string | undefined,
+    socialLinks,
   }
 }
 

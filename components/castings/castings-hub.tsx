@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { useAuth } from "@/lib/auth-context"
 import { useStore } from "@/lib/store-context"
 import type { Casting } from "@/lib/types"
-import { Search, Plus } from "lucide-react"
+import { Search, Plus, SlidersHorizontal, X } from "lucide-react"
 
 type CastingTab = "active" | "foryou" | "invited" | "applied" | "shortlisted" | "booked"
 
@@ -22,6 +22,12 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
   const { getActiveCastings, getCastingsForCreator, getApplicationsForModel, getCastings } = useStore()
   const [activeTab, setActiveTab] = useState<CastingTab>("active")
   const [search, setSearch] = useState("")
+  const [showFilters, setShowFilters] = useState(false)
+  const [filterType, setFilterType] = useState<string>("all")
+  const [filterPayMin, setFilterPayMin] = useState<string>("")
+  const [filterPayMax, setFilterPayMax] = useState<string>("")
+  const [filterLocation, setFilterLocation] = useState("")
+  const [sortBy, setSortBy] = useState<string>("newest")
 
   const isCreator = user?.role === "brand" || user?.role === "agency"
 
@@ -94,6 +100,45 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
       )
     }
 
+    // Apply type filter
+    if (filterType && filterType !== "all") {
+      castings = castings.filter((c) => c.type === filterType)
+    }
+
+    // Apply pay range filter
+    if (filterPayMin) {
+      const min = Number(filterPayMin)
+      if (!isNaN(min)) {
+        castings = castings.filter((c) => (c.pay?.amount ?? 0) >= min)
+      }
+    }
+    if (filterPayMax) {
+      const max = Number(filterPayMax)
+      if (!isNaN(max)) {
+        castings = castings.filter((c) => (c.pay?.amount ?? 0) <= max)
+      }
+    }
+
+    // Apply location filter
+    if (filterLocation) {
+      castings = castings.filter((c) =>
+        c.location.toLowerCase().includes(filterLocation.toLowerCase()),
+      )
+    }
+
+    // Apply sort
+    if (sortBy === "newest") {
+      castings = [...castings].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    } else if (sortBy === "deadline") {
+      castings = [...castings].sort((a, b) => {
+        if (!a.deadline) return 1
+        if (!b.deadline) return -1
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+      })
+    } else if (sortBy === "pay") {
+      castings = [...castings].sort((a, b) => (b.pay?.amount ?? 0) - (a.pay?.amount ?? 0))
+    }
+
     return castings
   }
 
@@ -139,9 +184,15 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
             ))}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <div className="relative w-9 h-9 flex items-center justify-center rounded-full bg-zinc-800/80 text-zinc-400">
-              <Search className="w-4 h-4" />
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowFilters((v) => !v)}
+              className={`relative w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+                showFilters ? "bg-white text-zinc-950" : "bg-zinc-800/80 text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
             {isCreator && onCreateCasting && (
               <Button
                 onClick={onCreateCasting}
@@ -161,6 +212,118 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
             className="h-9 rounded-full bg-zinc-800/80 border-zinc-700 text-zinc-200 placeholder:text-zinc-500 pl-4 text-sm"
           />
         </div>
+
+        {/* Collapsible Filter Panel */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden border-t border-zinc-800"
+            >
+              <div className="px-4 py-3 space-y-3">
+                {/* Type filter pills */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Type</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {(["all", "runway", "campaign", "editorial", "commercial", "event"] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setFilterType(t)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          filterType === t
+                            ? "bg-white text-zinc-950"
+                            : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                        }`}
+                      >
+                        {t === "all" ? "All" : t.charAt(0).toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pay range */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Pay Range</p>
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      type="number"
+                      placeholder="Min \u20ac"
+                      value={filterPayMin}
+                      onChange={(e) => setFilterPayMin(e.target.value)}
+                      className="h-8 w-24 rounded-lg bg-zinc-800 border-zinc-700 text-zinc-200 placeholder:text-zinc-500 text-xs"
+                    />
+                    <span className="text-zinc-500 text-xs">\u2013</span>
+                    <Input
+                      type="number"
+                      placeholder="Max \u20ac"
+                      value={filterPayMax}
+                      onChange={(e) => setFilterPayMax(e.target.value)}
+                      className="h-8 w-24 rounded-lg bg-zinc-800 border-zinc-700 text-zinc-200 placeholder:text-zinc-500 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Location */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Location</p>
+                  <Input
+                    placeholder="City or location..."
+                    value={filterLocation}
+                    onChange={(e) => setFilterLocation(e.target.value)}
+                    className="h-8 rounded-lg bg-zinc-800 border-zinc-700 text-zinc-200 placeholder:text-zinc-500 text-xs"
+                  />
+                </div>
+
+                {/* Sort by pills */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Sort By</p>
+                  <div className="flex gap-1.5">
+                    {([
+                      { key: "newest", label: "Newest" },
+                      { key: "deadline", label: "Deadline" },
+                      { key: "pay", label: "Pay (High\u2192Low)" },
+                    ] as const).map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setSortBy(s.key)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          sortBy === s.key
+                            ? "bg-white text-zinc-950"
+                            : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Clear filters */}
+                {(filterType !== "all" || filterPayMin || filterPayMax || filterLocation || sortBy !== "newest") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterType("all")
+                      setFilterPayMin("")
+                      setFilterPayMax("")
+                      setFilterLocation("")
+                      setSortBy("newest")
+                    }}
+                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Feed – masonry grid, image-dominant pins */}

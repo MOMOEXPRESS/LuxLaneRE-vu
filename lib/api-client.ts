@@ -36,7 +36,37 @@ interface ApiResponse<T> {
   error?: string
 }
 
-async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
+let isRefreshing = false
+let refreshPromise: Promise<boolean> | null = null
+
+async function tryRefreshToken(): Promise<boolean> {
+  if (isRefreshing && refreshPromise) return refreshPromise
+  isRefreshing = true
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" })
+      return res.ok
+    } catch {
+      return false
+    } finally {
+      isRefreshing = false
+      refreshPromise = null
+    }
+  })()
+  return refreshPromise
+}
+
+async function handleResponse<T>(response: Response, retryFn?: () => Promise<Response>): Promise<ApiResponse<T>> {
+  if (response.status === 401 && retryFn) {
+    const refreshed = await tryRefreshToken()
+    if (refreshed) {
+      const retryResponse = await retryFn()
+      if (retryResponse.ok) {
+        const data = await retryResponse.json()
+        return { data }
+      }
+    }
+  }
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: "Request failed" }))
     return { error: errorData.error || `Error: ${response.status}` }
@@ -78,8 +108,9 @@ export const api = {
   },
 
   async getCurrentUser() {
-    const response = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
-    return handleResponse(response)
+    const doFetch = () => fetch(`${API_BASE}/api/auth/me`, { credentials: "include" })
+    const response = await doFetch()
+    return handleResponse(response, doFetch)
   },
 
   async getSettings() {
@@ -297,15 +328,21 @@ export const api = {
   },
 
   // Castings
-  async getCastings(params?: { status?: string; query?: string; creatorId?: string; limit?: number }) {
+  async getCastings(params?: { status?: string; query?: string; creatorId?: string; limit?: number; type?: string; payMin?: number; payMax?: number; location?: string; sortBy?: string }) {
     const searchParams = new URLSearchParams()
     if (params?.status) searchParams.set("status", params.status)
     if (params?.query) searchParams.set("query", params.query)
     if (params?.creatorId) searchParams.set("creatorId", params.creatorId)
     if (params?.limit) searchParams.set("limit", String(params.limit))
+    if (params?.type) searchParams.set("type", params.type)
+    if (params?.payMin !== undefined && params.payMin !== null) searchParams.set("payMin", String(params.payMin))
+    if (params?.payMax !== undefined && params.payMax !== null) searchParams.set("payMax", String(params.payMax))
+    if (params?.location) searchParams.set("location", params.location)
+    if (params?.sortBy) searchParams.set("sortBy", params.sortBy)
 
-    const response = await fetch(`${API_BASE}/api/castings?${searchParams}`)
-    return handleResponse(response)
+    const doFetch = () => fetch(`${API_BASE}/api/castings?${searchParams}`)
+    const response = await doFetch()
+    return handleResponse(response, doFetch)
   },
 
   async getCasting(id: string) {
@@ -434,8 +471,9 @@ export const api = {
   // Notifications
   async getNotifications(unreadOnly?: boolean) {
     const url = unreadOnly ? `${API_BASE}/api/notifications?unread=true` : `${API_BASE}/api/notifications`
-    const response = await fetch(url)
-    return handleResponse(response)
+    const doFetch = () => fetch(url, { credentials: "include" })
+    const response = await doFetch()
+    return handleResponse(response, doFetch)
   },
 
   async markNotificationRead(id: string) {
@@ -450,8 +488,9 @@ export const api = {
 
   // Conversations
   async getConversations() {
-    const response = await fetch(`${API_BASE}/api/conversations`, { credentials: "include" })
-    return handleResponse(response)
+    const doFetch = () => fetch(`${API_BASE}/api/conversations`, { credentials: "include" })
+    const response = await doFetch()
+    return handleResponse(response, doFetch)
   },
 
   async startDirectConversation(userId: string) {
@@ -845,6 +884,59 @@ export const api = {
     const response = await fetch(`${API_BASE}/api/highlights/${id}`, {
       method: "DELETE",
       credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  // ─── Direct Bookings ───
+
+  async getBookings() {
+    const response = await fetch(`${API_BASE}/api/bookings`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async createBooking(data: {
+    modelId: string
+    title: string
+    description?: string
+    location?: string
+    startDate?: string
+    endDate?: string
+    payAmount?: number
+  }) {
+    const response = await fetch(`${API_BASE}/api/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  async updateBooking(id: string, data: { status: string }) {
+    const response = await fetch(`${API_BASE}/api/bookings/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  // ─── Moderation Reports ───
+
+  async getReports(status?: string) {
+    const params = status ? `?status=${status}` : ""
+    const response = await fetch(`${API_BASE}/api/reports${params}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async updateReport(id: string, status: string) {
+    const response = await fetch(`${API_BASE}/api/reports/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ status }),
     })
     return handleResponse(response)
   },

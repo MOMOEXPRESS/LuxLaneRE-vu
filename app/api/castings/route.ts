@@ -10,6 +10,11 @@ export async function GET(request: NextRequest) {
     const creatorId = searchParams.get("creatorId")
     const limit = Number(searchParams.get("limit")) || 20
     const offset = Number(searchParams.get("offset")) || 0
+    const type = searchParams.get("type")
+    const payMin = searchParams.get("payMin")
+    const payMax = searchParams.get("payMax")
+    const location = searchParams.get("location")
+    const sortBy = searchParams.get("sortBy")
 
     const where: Record<string, unknown> = {}
 
@@ -26,6 +31,38 @@ export async function GET(request: NextRequest) {
       ]
     }
 
+    // Type filter
+    if (type) {
+      where.type = type.toUpperCase()
+    }
+
+    // Pay range filters
+    if (payMin) {
+      where.payMax = { ...(where.payMax as Record<string, unknown> || {}), gte: Number(payMin) }
+    }
+    if (payMax) {
+      where.payMin = { ...(where.payMin as Record<string, unknown> || {}), lte: Number(payMax) }
+    }
+
+    // Location filter
+    if (location) {
+      where.location = { contains: location, mode: "insensitive" }
+    }
+
+    // Sort order
+    let orderBy: Record<string, string>[] | Record<string, string>
+    if (sortBy === "newest") {
+      orderBy = { createdAt: "desc" }
+    } else if (sortBy === "deadline") {
+      orderBy = [{ deadline: "asc" }, { createdAt: "desc" }]
+    } else if (sortBy === "pay") {
+      orderBy = [{ payMax: "desc" }, { createdAt: "desc" }]
+    } else if (creatorId) {
+      orderBy = { createdAt: "desc" }
+    } else {
+      orderBy = [{ deadline: "asc" }, { createdAt: "desc" }]
+    }
+
     const castings = await prisma.casting.findMany({
       where,
       include: {
@@ -35,9 +72,7 @@ export async function GET(request: NextRequest) {
         requirements: true,
         _count: { select: { submissions: true } },
       },
-      orderBy: creatorId
-        ? { createdAt: "desc" }
-        : [{ deadline: "asc" }, { createdAt: "desc" }],
+      orderBy: orderBy as any,
       take: limit,
       skip: offset,
     })

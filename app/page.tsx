@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useCallback } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api-client"
 import { useNavigation } from "@/lib/navigation-context"
@@ -24,7 +24,6 @@ import { CreateTwinFlow } from "@/components/digital-twin/create-twin-flow"
 import { CompareView } from "@/components/compare/compare-view"
 import { CastingRoomView } from "@/components/casting-room/casting-room"
 import { BrandDashboard } from "@/components/brand/brand-dashboard"
-import { mockConversations } from "@/lib/mock-data"
 import type { CastingRoom } from "@/lib/types"
 
 function useViewProfile() {
@@ -47,13 +46,25 @@ export default function Home() {
     goBack,
   } = useNavigation()
 
+  const [unreadCount, setUnreadCount] = useState(0)
+
   useEffect(() => {
     if (typeof window === "undefined") return
     const params = new URLSearchParams(window.location.search)
     if (params.get("tab") === "inbox") setActiveTab("inbox")
   }, [setActiveTab])
 
-  const unreadCount = mockConversations.reduce((acc, c) => acc + c.unreadCount, 0)
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const fetchUnread = async () => {
+      const res = await api.getNotifications(true) // unread only
+      const data = res.data as { notifications?: Array<unknown> } | undefined
+      setUnreadCount(data?.notifications?.length || 0)
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 30000) // poll every 30s
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
   const isBrandOrAgency = user?.role === "brand" || user?.role === "agency"
 
   if (!isAuthenticated) {

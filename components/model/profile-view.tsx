@@ -47,7 +47,10 @@ import {
   Heart,
   Trash2,
   GripVertical,
+  Instagram,
+  Camera,
 } from "lucide-react"
+import { uploadAvatar } from "@/lib/upload"
 import { mockUsers } from "@/lib/mock-data"
 import { DigitalTwinSection } from "@/components/digital-twin/digital-twin-section"
 
@@ -98,6 +101,10 @@ export function ProfileView({
   const [reportSent, setReportSent] = useState(false)
   const [isBlocked, setIsBlocked] = useState(false)
   const [isSavedModel, setIsSavedModel] = useState(false)
+
+  // Avatar upload state
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
 
   // Portfolio management state
   const [editingPortfolio, setEditingPortfolio] = useState(false)
@@ -154,6 +161,18 @@ export function ProfileView({
       await api.saveModel(user.id)
       setIsSavedModel(true)
     }
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarUploading(true)
+    const url = await uploadAvatar(file)
+    if (url) {
+      setAvatarUrl(url)
+      onProfileUpdated?.()
+    }
+    setAvatarUploading(false)
   }
 
   const handleDeletePortfolioItem = async (mediaId: string) => {
@@ -239,10 +258,34 @@ export function ProfileView({
       {/* Profile Header */}
       <div className="px-4 py-6">
         <div className="flex items-start justify-between mb-4">
-          <Avatar className="w-20 h-20 ring-2 ring-border">
-            <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-            <AvatarFallback className="text-2xl">{user.name[0]}</AvatarFallback>
-          </Avatar>
+          <div className="relative group">
+            <Avatar className="w-20 h-20 ring-2 ring-border">
+              <AvatarImage src={avatarUrl || user.avatar || "/placeholder.svg"} alt={user.name} />
+              <AvatarFallback className="text-2xl">{user.name[0]}</AvatarFallback>
+            </Avatar>
+            {isOwn && (
+              <>
+                <label
+                  htmlFor="avatar-upload"
+                  className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                >
+                  {avatarUploading ? (
+                    <span className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Camera className="w-5 h-5 text-white" />
+                  )}
+                </label>
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                  disabled={avatarUploading}
+                />
+              </>
+            )}
+          </div>
           <div className="flex gap-2">
             {!isOwn && isBrandOrAgency && user.role === "model" && (
               <Button
@@ -305,6 +348,20 @@ export function ProfileView({
               <MapPin className="w-3 h-3" />
               {user.location}
             </p>
+          )}
+          {user.socialLinks && (
+            <div className="flex items-center gap-3 mt-2">
+              {user.socialLinks.instagram && (
+                <a href={`https://instagram.com/${user.socialLinks.instagram}`} target="_blank" rel="noopener" className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1">
+                  <Instagram className="w-4 h-4" /> @{user.socialLinks.instagram}
+                </a>
+              )}
+              {user.socialLinks.tiktok && (
+                <a href={`https://tiktok.com/@${user.socialLinks.tiktok}`} target="_blank" rel="noopener" className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1">
+                  <span className="w-4 h-4 font-bold text-xs">TT</span> @{user.socialLinks.tiktok}
+                </a>
+              )}
+            </div>
           )}
         </div>
 

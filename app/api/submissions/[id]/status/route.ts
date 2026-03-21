@@ -56,6 +56,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       notificationType = "OFFER"
       notificationTitle = "You received an offer!"
       notificationBody = `You've been offered a spot in "${submission.casting.title}"`
+    } else if (newStatus === "CONFIRMED") {
+      notificationType = "CONFIRMED"
+      notificationTitle = "You're confirmed!"
+      notificationBody = `Your booking for "${submission.casting.title}" has been confirmed`
     } else if (newStatus === "REJECTED") {
       notificationType = "SYSTEM"
       notificationTitle = "Application Update"
@@ -69,7 +73,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           type: notificationType,
           payload: {
             title: notificationTitle,
-            body: notificationBody,
+            message: notificationBody,
+            castingId: submission.castingId,
             relatedId: submissionId,
             relatedType: "submission",
           },

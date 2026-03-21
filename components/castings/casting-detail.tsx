@@ -30,6 +30,9 @@ import {
   AlertCircle,
   Bookmark,
   Share2,
+  CheckSquare,
+  Square,
+  ListChecks,
 } from "lucide-react"
 import { api } from "@/lib/api-client"
 import { CastingAnalytics } from "@/components/analytics/casting-analytics"
@@ -61,6 +64,9 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
   const [aiMatchesFromApi, setAiMatchesFromApi] = useState<ModelMatch[]>([])
   const [aiMatchesLoading, setAiMatchesLoading] = useState(false)
   const [invitingId, setInvitingId] = useState<string | null>(null)
+  const [bulkSelectMode, setBulkSelectMode] = useState(false)
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([])
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
 
   const isModel = user?.role === "model"
   const isAgency = user?.role === "agency"
@@ -79,8 +85,10 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
       api.getCastingSubmission(casting.id),
       api.getCastingSaved(casting.id),
     ])
-    if (subRes.data?.submission) setSubmissionStatus(subRes.data.submission.status)
-    if (savedRes.data?.saved !== undefined) setSaved(savedRes.data.saved)
+    const subData = subRes.data as { submission?: { status: string } } | undefined
+    const savedData = savedRes.data as { saved?: boolean } | undefined
+    if (subData?.submission) setSubmissionStatus(subData.submission.status)
+    if (savedData?.saved !== undefined) setSaved(savedData.saved)
   }, [casting.id, user])
 
   useEffect(() => {
@@ -151,8 +159,9 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
       return
     }
     setSubmissionStatus("applied")
+    const applyData = res.data as { submission?: { id: string } } | undefined
     addApplication({
-      id: res.data?.submission?.id ?? `app-${Date.now()}`,
+      id: applyData?.submission?.id ?? `app-${Date.now()}`,
       castingId: casting.id,
       casting,
       modelId: user.id,
@@ -225,8 +234,60 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
   const getActionButton = () => {
     if (isCreator) {
       const submissions = getApplicationsForCasting(casting.id)
+
+      if (bulkSelectMode && selectedSubmissionIds.length > 0) {
+        return (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="shrink-0">
+              {selectedSubmissionIds.length} selected
+            </Badge>
+            <Button
+              className="flex-1 h-12 bg-amber-600 hover:bg-amber-700"
+              size="lg"
+              disabled={bulkActionLoading}
+              onClick={async () => {
+                setBulkActionLoading(true)
+                await api.bulkAction(casting.id, { action: "shortlist", submissionIds: selectedSubmissionIds })
+                setBulkActionLoading(false)
+                setSelectedSubmissionIds([])
+                setBulkSelectMode(false)
+              }}
+            >
+              Shortlist Selected
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1 h-12 bg-transparent border-red-500/50 text-red-400 hover:bg-red-500/10"
+              size="lg"
+              disabled={bulkActionLoading}
+              onClick={async () => {
+                setBulkActionLoading(true)
+                await api.bulkAction(casting.id, { action: "reject", submissionIds: selectedSubmissionIds })
+                setBulkActionLoading(false)
+                setSelectedSubmissionIds([])
+                setBulkSelectMode(false)
+              }}
+            >
+              Reject Selected
+            </Button>
+          </div>
+        )
+      }
+
       return (
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="lg"
+            className={`h-12 ${bulkSelectMode ? "bg-white text-zinc-950" : "bg-transparent"}`}
+            onClick={() => {
+              setBulkSelectMode((v) => !v)
+              setSelectedSubmissionIds([])
+            }}
+          >
+            <ListChecks className="w-4 h-4 mr-1" />
+            Select
+          </Button>
           <Button className="flex-1 h-12" size="lg">
             Review Submissions
             <Badge variant="secondary" className="ml-2">
@@ -565,6 +626,89 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
           </span>
           <span>{casting.shortlistedCount} shortlisted</span>
         </div>
+
+        {/* Submissions list with bulk select (creator only) */}
+        {isCreator && (() => {
+          const submissions = getApplicationsForCasting(casting.id)
+          if (submissions.length === 0) return null
+          return (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">Submissions</h3>
+                {bulkSelectMode && submissions.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => {
+                      if (selectedSubmissionIds.length === submissions.length) {
+                        setSelectedSubmissionIds([])
+                      } else {
+                        setSelectedSubmissionIds(submissions.map((s) => s.id))
+                      }
+                    }}
+                  >
+                    {selectedSubmissionIds.length === submissions.length ? "Deselect all" : "Select all"}
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                {submissions.map((submission) => {
+                  const isSelected = selectedSubmissionIds.includes(submission.id)
+                  return (
+                    <Card
+                      key={submission.id}
+                      className={`p-3 flex items-center gap-3 transition-colors ${
+                        bulkSelectMode ? "cursor-pointer" : ""
+                      } ${isSelected ? "bg-muted border-foreground" : ""}`}
+                      onClick={() => {
+                        if (!bulkSelectMode) return
+                        if (isSelected) {
+                          setSelectedSubmissionIds((prev) => prev.filter((id) => id !== submission.id))
+                        } else {
+                          setSelectedSubmissionIds((prev) => [...prev, submission.id])
+                        }
+                      }}
+                    >
+                      {bulkSelectMode && (
+                        <div className="shrink-0">
+                          {isSelected ? (
+                            <CheckSquare className="w-5 h-5 text-foreground" />
+                          ) : (
+                            <Square className="w-5 h-5 text-muted-foreground" />
+                          )}
+                        </div>
+                      )}
+                      <Avatar className="w-10 h-10 shrink-0">
+                        <AvatarImage src={submission.model?.avatar || "/placeholder.svg"} alt={submission.model?.name || "Model"} />
+                        <AvatarFallback>{submission.model?.name?.[0] || "M"}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{submission.model?.name || "Unknown"}</p>
+                        {submission.message && (
+                          <p className="text-xs text-muted-foreground truncate">{submission.message}</p>
+                        )}
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={`shrink-0 capitalize text-xs ${
+                          submission.status === "shortlisted"
+                            ? "bg-amber-500/10 text-amber-600"
+                            : submission.status === "accepted" || submission.status === "offered"
+                              ? "bg-emerald-500/10 text-emerald-600"
+                              : submission.status === "rejected"
+                                ? "bg-red-500/10 text-red-600"
+                                : ""
+                        }`}
+                      >
+                        {submission.status}
+                      </Badge>
+                    </Card>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
 
         {(isBrand || isAgency || isCreator) && aiMatchesLoading && (
           <p className="text-sm text-muted-foreground py-4">Loading AI matches…</p>
