@@ -1,69 +1,83 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
-import { v4 as uuidv4 } from "uuid"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const status = searchParams.get("status") || "active"
+    const status = searchParams.get("status") || "ACTIVE"
     const query = searchParams.get("query")
-    const tags = searchParams.get("tags")?.split(",").filter(Boolean)
     const creatorId = searchParams.get("creatorId")
     const limit = Number(searchParams.get("limit")) || 20
     const offset = Number(searchParams.get("offset")) || 0
 
-    let castings
+    const where: Record<string, unknown> = {}
 
     if (creatorId) {
-      // Get castings by specific creator
-      castings = await db`
-        SELECT c.*, u.display_name as creator_name, u.avatar_url as creator_avatar, u.username as creator_username
-        FROM castings c
-        JOIN users u ON c.creator_id = u.id
-        WHERE c.creator_id = ${creatorId}
-        ORDER BY c.created_at DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `
-    } else if (query) {
-      // Search castings
-      castings = await db`
-        SELECT c.*, u.display_name as creator_name, u.avatar_url as creator_avatar, u.username as creator_username
-        FROM castings c
-        JOIN users u ON c.creator_id = u.id
-        WHERE c.status = ${status}
-          AND (c.title ILIKE ${"%" + query + "%"} OR c.description ILIKE ${"%" + query + "%"})
-        ORDER BY c.created_at DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `
+      where.createdBy = creatorId
     } else {
-      // Get castings by status
-      castings = await db`
-        SELECT c.*, u.display_name as creator_name, u.avatar_url as creator_avatar, u.username as creator_username
-        FROM castings c
-        JOIN users u ON c.creator_id = u.id
-        WHERE c.status = ${status}
-        ORDER BY c.deadline ASC NULLS LAST, c.created_at DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `
+      where.status = status.toUpperCase()
     }
 
-    // Get requirements for each casting
-    const castingIds = castings.map((c: { id: string }) => c.id)
-    let requirements: Record<string, unknown>[] = []
-    if (castingIds.length > 0) {
-      requirements = await db`
-        SELECT * FROM casting_requirements WHERE casting_id = ANY(${castingIds})
-      `
+    if (query) {
+      where.OR = [
+        { title: { contains: query, mode: "insensitive" } },
+        { description: { contains: query, mode: "insensitive" } },
+      ]
     }
 
-    // Attach requirements to castings
-    const castingsWithRequirements = castings.map((c: Record<string, unknown>) => ({
-      ...c,
-      requirements: requirements.find((r: Record<string, unknown>) => r.casting_id === c.id) || null,
+    const castings = await prisma.casting.findMany({
+      where,
+      include: {
+        creator: {
+          include: { profile: true },
+        },
+        requirements: true,
+        _count: { select: { submissions: true } },
+      },
+      orderBy: creatorId
+        ? { createdAt: "desc" }
+        : [{ deadline: "asc" }, { createdAt: "desc" }],
+      take: limit,
+      skip: offset,
+    })
+
+    // Fetch shortlisted counts in parallel
+    const shortlistedCounts = await Promise.all(
+      castings.map((c) =>
+        prisma.submission.count({
+          where: { castingId: c.id, status: { in: ["SHORTLISTED", "OFFERED", "ACCEPTED", "CONFIRMED"] } },
+        })
+      )
+    )
+
+    const result = castings.map((c, i) => ({
+      id: c.id,
+      createdBy: c.createdBy,
+      title: c.title,
+      type: c.type,
+      description: c.description,
+      location: c.location,
+      startDate: c.startDate,
+      endDate: c.endDate,
+      payMin: c.payMin,
+      payMax: c.payMax,
+      deadline: c.deadline,
+      status: c.status,
+      verifiedOnly: c.verifiedOnly,
+      requireDigitalTwin: c.requireDigitalTwin,
+      maxSubmissionsPerAgency: c.maxSubmissionsPerAgency,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+      creatorName: c.creator.profile?.displayName ?? c.creator.username,
+      creatorAvatar: c.creator.profile?.avatarUrl ?? null,
+      creatorUsername: c.creator.username,
+      requirements: c.requirements ?? null,
+      submissionsCount: c._count.submissions,
+      shortlistedCount: shortlistedCounts[i],
     }))
 
-    return NextResponse.json({ castings: castingsWithRequirements })
+    return NextResponse.json({ castings: result })
   } catch (error) {
     console.error("Get castings error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -77,9 +91,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Only brands and agencies can create castings
-    if (!["brand", "agency"].includes(user.role)) {
-      return NextResponse.json({ error: "Only brands and agencies can create castings" }, { status: 403 })
+    if (!["brand", "agency", "client"].includes(user.role)) {
+      return NextResponse.json({ error: "Only brands, agencies, and clients can create castings" }, { status: 403 })
     }
 
     const body = await request.json()
@@ -88,15 +101,14 @@ export async function POST(request: NextRequest) {
       description,
       type,
       location,
-      city,
-      country,
       payMin,
       payMax,
-      payCurrency,
       deadline,
-      shootDateStart,
-      shootDateEnd,
-      tags,
+      startDate,
+      endDate,
+      verifiedOnly,
+      requireDigitalTwin,
+      maxSubmissionsPerAgency,
       requirements,
     } = body
 
@@ -104,44 +116,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title and type are required" }, { status: 400 })
     }
 
-    const castingId = uuidv4()
-
-    // Create casting
-    await db`
-      INSERT INTO castings (
-        id, creator_id, title, description, type, location, city, country,
-        pay_min, pay_max, pay_currency, deadline, shoot_date_start, shoot_date_end, tags, status
-      )
-      VALUES (
-        ${castingId}, ${user.id}, ${title}, ${description || null}, ${type}, 
-        ${location || null}, ${city || null}, ${country || null},
-        ${payMin || null}, ${payMax || null}, ${payCurrency || "USD"},
-        ${deadline || null}, ${shootDateStart || null}, ${shootDateEnd || null},
-        ${tags || []}, 'draft'
-      )
-    `
-
-    // Create requirements if provided
-    if (requirements) {
-      await db`
-        INSERT INTO casting_requirements (
-          id, casting_id, height_min, height_max, age_min, age_max,
-          gender, eye_colors, hair_colors, experience_tags, verified_only, digital_twin_required
-        )
-        VALUES (
-          ${uuidv4()}, ${castingId}, 
-          ${requirements.heightMin || null}, ${requirements.heightMax || null},
-          ${requirements.ageMin || null}, ${requirements.ageMax || null},
-          ${requirements.gender || null}, ${requirements.eyeColors || []},
-          ${requirements.hairColors || []}, ${requirements.experienceTags || []},
-          ${requirements.verifiedOnly || false}, ${requirements.digitalTwinRequired || false}
-        )
-      `
-    }
+    const casting = await prisma.casting.create({
+      data: {
+        createdBy: user.id,
+        title,
+        description: description || null,
+        type: type.toUpperCase(),
+        location: location || null,
+        payMin: payMin || null,
+        payMax: payMax || null,
+        deadline: deadline ? new Date(deadline) : null,
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
+        verifiedOnly: verifiedOnly || false,
+        requireDigitalTwin: requireDigitalTwin || false,
+        maxSubmissionsPerAgency: maxSubmissionsPerAgency || null,
+        status: "DRAFT",
+        ...(requirements
+          ? {
+              requirements: {
+                create: {
+                  minHeightCm: requirements.minHeightCm || null,
+                  maxHeightCm: requirements.maxHeightCm || null,
+                  tags: requirements.tags || [],
+                  notes: requirements.notes || null,
+                },
+              },
+            }
+          : {}),
+      },
+    })
 
     return NextResponse.json({
       success: true,
-      casting: { id: castingId },
+      casting: { id: casting.id },
     })
   } catch (error) {
     console.error("Create casting error:", error)

@@ -7,18 +7,10 @@ import {
   setAuthCookies,
   generateUniqueUsername,
 } from "@/lib/auth"
-import { Role } from "@prisma/client"
-
-const VALID_ROLES: Role[] = [Role.MODEL, Role.AGENCY, Role.BRAND]
+const VALID_ROLES = ["MODEL", "AGENCY", "BRAND", "CLIENT"] as const
 
 export async function POST(request: NextRequest) {
   try {
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json(
-        { error: "Server misconfigured: database not set. Add DATABASE_URL in Vercel (or .env) and redeploy." },
-        { status: 500 }
-      )
-    }
     const body = await request.json()
     const { email, password, displayName, role: roleInput, username: usernameInput } = body
 
@@ -27,10 +19,10 @@ export async function POST(request: NextRequest) {
     }
 
     const roleUpper = String(roleInput).toUpperCase()
-    if (!VALID_ROLES.includes(roleUpper as Role)) {
+    if (!VALID_ROLES.includes(roleUpper as any)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 })
     }
-    const role = roleUpper as Role
+    const role = roleUpper as string
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
@@ -71,17 +63,21 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (role === Role.MODEL) {
+    if (role === "MODEL") {
       await prisma.modelProfile.create({
         data: { userId: user.id },
       })
-    } else if (role === Role.AGENCY) {
+    } else if (role === "AGENCY") {
       await prisma.agencyProfile.create({
         data: { userId: user.id, agencyName: displayName },
       })
-    } else if (role === Role.BRAND) {
+    } else if (role === "BRAND") {
       await prisma.brandProfile.create({
         data: { userId: user.id, brandName: displayName },
+      })
+    } else if (role === "CLIENT") {
+      await prisma.clientProfile.create({
+        data: { userId: user.id, clientName: displayName },
       })
     }
 
@@ -89,6 +85,8 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       email: user.email,
       role: user.role.toLowerCase() as "model" | "agency" | "brand" | "client",
+      username: user.username,
+      displayName,
     })
     const refreshToken = await generateRefreshToken(user.id)
 

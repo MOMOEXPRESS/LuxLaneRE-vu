@@ -153,6 +153,82 @@ export const api = {
     return handleResponse<{ roster: AgencyRosterItem[] }>(response)
   },
 
+  // Agency roster management
+  async inviteModelToAgency(modelId: string, note?: string) {
+    const response = await fetch(`${API_BASE}/api/agency/invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ modelId, note }),
+    })
+    return handleResponse(response)
+  },
+
+  async removeModelFromAgency(modelId: string) {
+    const response = await fetch(`${API_BASE}/api/agency/remove`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ modelId }),
+    })
+    return handleResponse(response)
+  },
+
+  async getAgencyApplications(status?: string) {
+    const params = status ? `?status=${status}` : ""
+    const response = await fetch(`${API_BASE}/api/agency/applications${params}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async applyToAgency(agencyId: string, note?: string) {
+    const response = await fetch(`${API_BASE}/api/agency/applications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ agencyId, note }),
+    })
+    return handleResponse(response)
+  },
+
+  async respondToAgencyApplication(applicationId: string, action: "accept" | "reject") {
+    const response = await fetch(`${API_BASE}/api/agency/applications/${applicationId}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ action }),
+    })
+    return handleResponse(response)
+  },
+
+  // Availability calendar
+  async getAvailability(month?: string, userId?: string) {
+    const params = new URLSearchParams()
+    if (month) params.set("month", month)
+    if (userId) params.set("userId", userId)
+    const response = await fetch(`${API_BASE}/api/availability?${params}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async setAvailability(dates: Array<{ date: string; status: string }>) {
+    const response = await fetch(`${API_BASE}/api/availability`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ dates }),
+    })
+    return handleResponse(response)
+  },
+
+  async deleteAvailability(dates: string[]) {
+    const response = await fetch(`${API_BASE}/api/availability`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ dates }),
+    })
+    return handleResponse(response)
+  },
+
   // Posts (feed)
   async getPosts(params?: { limit?: number; cursor?: string }) {
     const searchParams = new URLSearchParams()
@@ -472,11 +548,304 @@ export const api = {
     return this.confirmMedia({ url, type: "PORTFOLIO" })
   },
 
+  // Casting Rooms
+  async getCastingRoom(castingId: string) {
+    const response = await fetch(`${API_BASE}/api/casting-rooms?castingId=${castingId}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async createCastingRoom(castingId: string) {
+    const response = await fetch(`${API_BASE}/api/casting-rooms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ castingId }),
+    })
+    return handleResponse(response)
+  },
+
+  async getRoomEvents(roomId: string) {
+    const response = await fetch(`${API_BASE}/api/casting-rooms/${roomId}/events`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async createRoomEvent(roomId: string, data: { type: string; targetUserId?: string; message?: string }) {
+    const response = await fetch(`${API_BASE}/api/casting-rooms/${roomId}/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  async getRoomFiles(roomId: string) {
+    const response = await fetch(`${API_BASE}/api/casting-rooms/${roomId}/files`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async uploadRoomFile(roomId: string, data: { name: string; type: string; url: string }) {
+    const response = await fetch(`${API_BASE}/api/casting-rooms/${roomId}/files`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  async getRoomSchedule(roomId: string) {
+    const response = await fetch(`${API_BASE}/api/casting-rooms/${roomId}/schedule`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async addRoomScheduleItem(roomId: string, data: { title: string; date: string; time: string; location?: string; notes?: string }) {
+    const response = await fetch(`${API_BASE}/api/casting-rooms/${roomId}/schedule`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  async getRoomMessages(roomId: string, before?: string) {
+    const url = before
+      ? `${API_BASE}/api/casting-rooms/${roomId}/messages?before=${before}`
+      : `${API_BASE}/api/casting-rooms/${roomId}/messages`
+    const response = await fetch(url, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async sendRoomMessage(roomId: string, content: string) {
+    const response = await fetch(`${API_BASE}/api/casting-rooms/${roomId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ content }),
+    })
+    return handleResponse(response)
+  },
+
   async getMedia(ownerId?: string, type?: string) {
     const params = new URLSearchParams()
     if (ownerId) params.set("ownerId", ownerId)
     if (type) params.set("type", type)
     const response = await fetch(`${API_BASE}/api/media?${params}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async deleteMedia(id: string) {
+    const response = await fetch(`${API_BASE}/api/media/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  async reorderMedia(orderedIds: string[]) {
+    const response = await fetch(`${API_BASE}/api/media/reorder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ orderedIds }),
+    })
+    return handleResponse(response)
+  },
+
+  // Block / Report
+  async blockUser(username: string) {
+    const response = await fetch(`${API_BASE}/api/users/${username}/block`, {
+      method: "POST",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  async unblockUser(username: string) {
+    const response = await fetch(`${API_BASE}/api/users/${username}/block`, {
+      method: "DELETE",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  async checkBlocked(username: string) {
+    const response = await fetch(`${API_BASE}/api/users/${username}/block`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async reportUser(username: string, reason: string, details?: string) {
+    const response = await fetch(`${API_BASE}/api/users/${username}/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ reason, details }),
+    })
+    return handleResponse(response)
+  },
+
+  // Saved Models (Talent Pool)
+  async getSavedModels() {
+    const response = await fetch(`${API_BASE}/api/saved-models`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async saveModel(modelId: string, note?: string) {
+    const response = await fetch(`${API_BASE}/api/saved-models`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ modelId, note }),
+    })
+    return handleResponse(response)
+  },
+
+  async unsaveModel(modelId: string) {
+    const response = await fetch(`${API_BASE}/api/saved-models`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ modelId }),
+    })
+    return handleResponse(response)
+  },
+
+  // Job History
+  async getJobHistory(params?: { status?: string; limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams()
+    if (params?.status) searchParams.set("status", params.status)
+    if (params?.limit) searchParams.set("limit", String(params.limit))
+    if (params?.offset) searchParams.set("offset", String(params.offset))
+    const response = await fetch(`${API_BASE}/api/submissions/history?${searchParams}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  // Bulk Actions
+  async bulkAction(castingId: string, data: { action: string; submissionIds?: string[]; modelIds?: string[] }) {
+    const response = await fetch(`${API_BASE}/api/castings/${castingId}/bulk-action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  // ─── Phase 3: Analytics ───
+
+  async getProfileAnalytics(profileId?: string) {
+    const params = profileId ? `?profileId=${profileId}` : ""
+    const response = await fetch(`${API_BASE}/api/analytics/profile${params}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async trackProfileView(profileId: string, source?: string) {
+    const response = await fetch(`${API_BASE}/api/analytics/profile/track`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ profileId, source }),
+    })
+    return handleResponse(response)
+  },
+
+  async getCastingAnalytics(castingId: string) {
+    const response = await fetch(`${API_BASE}/api/analytics/casting?castingId=${castingId}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async trackCastingView(castingId: string) {
+    const response = await fetch(`${API_BASE}/api/analytics/casting/track`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ castingId }),
+    })
+    return handleResponse(response)
+  },
+
+  // ─── Phase 3: Earnings ───
+
+  async getEarnings(params?: { status?: string; limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams()
+    if (params?.status) searchParams.set("status", params.status)
+    if (params?.limit) searchParams.set("limit", String(params.limit))
+    if (params?.offset) searchParams.set("offset", String(params.offset))
+    const response = await fetch(`${API_BASE}/api/earnings?${searchParams}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  // ─── Phase 3: Stories ───
+
+  async getStoryFeed() {
+    const response = await fetch(`${API_BASE}/api/stories`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async getUserStories(userId: string) {
+    const response = await fetch(`${API_BASE}/api/stories?userId=${userId}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async createStory(data: { mediaUrl: string; mediaType?: string; caption?: string }) {
+    const response = await fetch(`${API_BASE}/api/stories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  async deleteStory(storyId: string) {
+    const response = await fetch(`${API_BASE}/api/stories/${storyId}`, {
+      method: "DELETE",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  async viewStory(storyId: string) {
+    const response = await fetch(`${API_BASE}/api/stories/${storyId}/view`, {
+      method: "POST",
+      credentials: "include",
+    })
+    return handleResponse(response)
+  },
+
+  // ─── Phase 3: Highlights ───
+
+  async getHighlights(userId: string) {
+    const response = await fetch(`${API_BASE}/api/highlights?userId=${userId}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async createHighlight(data: { title: string; coverUrl?: string; storyIds?: string[] }) {
+    const response = await fetch(`${API_BASE}/api/highlights`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  async updateHighlight(id: string, data: { title?: string; coverUrl?: string; addStoryIds?: string[]; removeStoryIds?: string[] }) {
+    const response = await fetch(`${API_BASE}/api/highlights/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(data),
+    })
+    return handleResponse(response)
+  },
+
+  async deleteHighlight(id: string) {
+    const response = await fetch(`${API_BASE}/api/highlights/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    })
     return handleResponse(response)
   },
 }

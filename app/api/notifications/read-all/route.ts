@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { prisma } from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
@@ -10,9 +10,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    await db`
-      UPDATE notifications SET read = true WHERE user_id = ${user.id} AND read = false
-    `
+    await prisma.notification.updateMany({
+      where: { userId: user.id, read: false },
+      data: { read: true },
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

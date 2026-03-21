@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useAuth } from "@/lib/auth-context"
-import { useStore } from "@/lib/store-context"
 import { api, type AgencyRosterItem } from "@/lib/api-client"
 import type { Casting, CastingApplication, CastingType, User } from "@/lib/types"
 import {
@@ -47,24 +46,199 @@ interface BrandDashboardProps {
   bottomNav?: React.ReactNode
 }
 
+// --- API response → frontend type adapters ---
+
+interface ApiCastingRow {
+  id: string
+  createdBy: string
+  title: string
+  type: string
+  description: string | null
+  location: string | null
+  startDate: string | null
+  endDate: string | null
+  payMin: number | null
+  payMax: number | null
+  deadline: string | null
+  status: string
+  verifiedOnly: boolean
+  requireDigitalTwin: boolean
+  maxSubmissionsPerAgency: number | null
+  createdAt: string
+  creatorName: string
+  creatorAvatar: string | null
+  creatorUsername: string
+  submissionsCount?: number
+  shortlistedCount?: number
+}
+
+function apiCastingToFrontend(c: ApiCastingRow): Casting {
+  return {
+    id: c.id,
+    creatorId: c.createdBy,
+    creator: {
+      id: c.createdBy,
+      email: "",
+      name: c.creatorName,
+      username: c.creatorUsername,
+      role: "brand",
+      verified: false,
+      verificationLevel: "unverified",
+      avatar: c.creatorAvatar ?? "",
+      bio: "",
+      location: "",
+      followers: 0,
+      following: 0,
+      createdAt: new Date(),
+      companyName: c.creatorName,
+    },
+    title: c.title,
+    type: c.type.toLowerCase() as CastingType,
+    description: c.description ?? "",
+    location: c.location ?? "TBD",
+    dates: {
+      start: c.startDate ? new Date(c.startDate) : new Date(),
+      end: c.endDate ? new Date(c.endDate) : new Date(),
+    },
+    pay: {
+      amount: c.payMin ?? 0,
+      currency: "USD",
+      type: c.payMin ? "flat" : "tbd",
+    },
+    requirements: {},
+    deadline: c.deadline ? new Date(c.deadline) : new Date(),
+    status: c.status.toLowerCase() as "active" | "draft" | "closed",
+    applicationsCount: c.submissionsCount ?? 0,
+    shortlistedCount: c.shortlistedCount ?? 0,
+    createdAt: new Date(c.createdAt),
+    images: [],
+    settings: {
+      verifiedOnly: c.verifiedOnly,
+      maxSubmissionsPerAgency: c.maxSubmissionsPerAgency ?? 10,
+      requireDigitalTwin: c.requireDigitalTwin,
+    },
+  }
+}
+
+interface ApiSubmissionRow {
+  id: string
+  castingId: string
+  modelId: string
+  status: string
+  note: string | null
+  createdAt: string
+  updatedAt: string
+  modelName: string
+  modelAvatar: string | null
+  modelUsername: string
+  modelHeightCm: number | null
+  modelScore: number
+}
+
+function apiSubmissionToFrontend(s: ApiSubmissionRow, casting?: Casting): CastingApplication {
+  return {
+    id: s.id,
+    castingId: s.castingId,
+    casting,
+    modelId: s.modelId,
+    model: {
+      id: s.modelId,
+      email: "",
+      name: s.modelName,
+      username: s.modelUsername,
+      role: "model",
+      verified: false,
+      verificationLevel: "unverified",
+      avatar: s.modelAvatar ?? "",
+      bio: "",
+      location: "",
+      followers: 0,
+      following: 0,
+      createdAt: new Date(),
+      measurements: s.modelHeightCm ? { height: `${s.modelHeightCm} cm` } : undefined,
+    },
+    status: s.status.toLowerCase() as CastingApplication["status"],
+    message: s.note ?? undefined,
+    submittedAt: new Date(s.createdAt),
+    updatedAt: new Date(s.updatedAt),
+  }
+}
+
+// --- Main Component ---
+
 export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav }: BrandDashboardProps) {
   const { user } = useAuth()
-  const { getCastingsForCreator, getApplicationsForCasting, addCasting, getActiveCastings } = useStore()
   const [activeTab, setActiveTab] = useState<BrandTab>("castings")
   const [showCreateCasting, setShowCreateCasting] = useState(false)
   const [selectedCasting, setSelectedCasting] = useState<Casting | null>(null)
   const [showSettings, setShowSettings] = useState(false)
 
-  const myCastings = user ? getCastingsForCreator(user.id) : []
-  const totalSubmissions = myCastings.reduce((acc, c) => {
-    const apps = getApplicationsForCasting(c.id)
-    return acc + apps.length
-  }, 0)
+  // API-driven state
+  const [myCastings, setMyCastings] = useState<Casting[]>([])
+  const [platformCastings, setPlatformCastings] = useState<Casting[]>([])
+  const [allSubmissions, setAllSubmissions] = useState<CastingApplication[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchMyCastings = useCallback(async () => {
+    if (!user) return
+    const res = await api.getCastings({ creatorId: user.id })
+    const data = res.data as { castings?: ApiCastingRow[] } | undefined
+    if (data?.castings) {
+      setMyCastings(data.castings.map(apiCastingToFrontend))
+    }
+  }, [user])
+
+  const fetchPlatformCastings = useCallback(async () => {
+    if (!user) return
+    const res = await api.getCastings({ status: "active", limit: 5 })
+    const data = res.data as { castings?: ApiCastingRow[] } | undefined
+    if (data?.castings) {
+      const rows = data.castings.filter((c) => c.createdBy !== user.id)
+      setPlatformCastings(rows.map(apiCastingToFrontend))
+    }
+  }, [user])
+
+  const fetchAllSubmissions = useCallback(async () => {
+    if (!user || myCastings.length === 0) {
+      setAllSubmissions([])
+      return
+    }
+    const results = await Promise.all(
+      myCastings.map(async (casting) => {
+        const res = await api.getSubmissions(casting.id)
+        const data = res.data as { submissions?: ApiSubmissionRow[] } | undefined
+        if (data?.submissions) {
+          return data.submissions.map((s) => apiSubmissionToFrontend(s, casting))
+        }
+        return []
+      })
+    )
+    setAllSubmissions(results.flat())
+  }, [user, myCastings])
+
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true)
+      await Promise.all([fetchMyCastings(), fetchPlatformCastings()])
+      setLoading(false)
+    }
+    init()
+  }, [fetchMyCastings, fetchPlatformCastings])
+
+  // Fetch submissions when switching to submissions tab or when castings load
+  useEffect(() => {
+    if (activeTab === "submissions" && myCastings.length > 0) {
+      fetchAllSubmissions()
+    }
+  }, [activeTab, myCastings, fetchAllSubmissions])
+
+  const totalSubmissions = myCastings.reduce((acc, c) => acc + c.applicationsCount, 0)
   const activeCastingsCount = myCastings.filter((c) => c.status === "active").length
 
-  const globalActiveCastings = getActiveCastings()
-    .filter((c) => c.creatorId !== user?.id)
-    .slice(0, 5)
+  const handleCastingCreated = useCallback(async () => {
+    await fetchMyCastings()
+    setShowCreateCasting(false)
+  }, [fetchMyCastings])
 
   const tabs: { id: BrandTab; label: string; icon: React.ReactNode }[] = [
     { id: "castings", label: "Castings", icon: <Briefcase className="w-5 h-5" /> },
@@ -84,7 +258,10 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
     return (
       <CastingSubmissions
         casting={selectedCasting}
-        onBack={() => setSelectedCasting(null)}
+        onBack={() => {
+          setSelectedCasting(null)
+          fetchMyCastings() // Refresh counts
+        }}
         onViewProfile={onViewProfile}
       />
     )
@@ -113,7 +290,7 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
         </div>
       </header>
 
-      {/* Quick Stats - 3 stat cards row */}
+      {/* Quick Stats */}
       <div className="px-4 py-4 border-b border-border">
         <div className="grid grid-cols-3 gap-3">
           <Card className="p-3 text-center">
@@ -133,7 +310,7 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
         </div>
       </div>
 
-      {/* Internal tab row */}
+      {/* Tab row */}
       <div className="flex border-b border-border sticky top-14 bg-background z-30">
         {tabs.map((tab) => (
           <button
@@ -153,44 +330,51 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
         {activeTab === "castings" && (
           <motion.div key="castings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="p-4">
-              {/* Create New Casting button */}
               <Button className="w-full h-12 mb-4" onClick={() => setShowCreateCasting(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create New Casting
               </Button>
 
-              {/* Your Castings section */}
-              <div className="mb-6">
-                <h3 className="text-sm font-medium text-muted-foreground mb-3">Your Castings</h3>
-                {myCastings.length > 0 ? (
-                  <div className="space-y-3">
-                    {myCastings.map((casting) => (
-                      <CastingCard key={casting.id} casting={casting} onClick={() => handleCastingClick(casting)} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-lg">
-                    <Briefcase className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No castings yet</p>
-                    <p className="text-sm">Create your first casting to find talent</p>
-                  </div>
-                )}
-              </div>
-
-              {globalActiveCastings.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-3">Active on Platform</h3>
-                  <div className="space-y-3">
-                    {globalActiveCastings.map((casting) => (
-                      <CastingCard
-                        key={casting.id}
-                        casting={casting}
-                        onClick={() => handleCastingClick(casting)}
-                        showCreator
-                      />
-                    ))}
-                  </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading castings…</span>
                 </div>
+              ) : (
+                <>
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium text-muted-foreground mb-3">Your Castings</h3>
+                    {myCastings.length > 0 ? (
+                      <div className="space-y-3">
+                        {myCastings.map((casting) => (
+                          <CastingCard key={casting.id} casting={casting} onClick={() => handleCastingClick(casting)} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-lg">
+                        <Briefcase className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p>No castings yet</p>
+                        <p className="text-sm">Create your first casting to find talent</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {platformCastings.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground mb-3">Active on Platform</h3>
+                      <div className="space-y-3">
+                        {platformCastings.map((casting) => (
+                          <CastingCard
+                            key={casting.id}
+                            casting={casting}
+                            onClick={() => handleCastingClick(casting)}
+                            showCreator
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </motion.div>
@@ -206,6 +390,7 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
           >
             <AllSubmissionsView
               castings={myCastings}
+              submissions={allSubmissions}
               onSelectCasting={setSelectedCasting}
               onViewProfile={onViewProfile}
             />
@@ -250,20 +435,11 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
         )}
       </AnimatePresence>
 
-      {/* Create Casting Sheet */}
-      <CreateCastingSheet open={showCreateCasting} onClose={() => setShowCreateCasting(false)} onAdd={addCasting} />
+      <CreateCastingSheet open={showCreateCasting} onClose={() => setShowCreateCasting(false)} onCreated={handleCastingCreated} />
 
       {bottomNav}
     </div>
   )
-}
-
-const CASTING_TYPE_LABELS: Record<string, string> = {
-  RUNWAY: "Runway",
-  CAMPAIGN: "Campaign",
-  EDITORIAL: "Editorial",
-  EVENT: "Event",
-  OTHER: "Other",
 }
 
 const AVAILABILITY_LABELS: Record<string, string> = {
@@ -272,21 +448,20 @@ const AVAILABILITY_LABELS: Record<string, string> = {
   BOOKED: "Booked",
 }
 
-interface ApiCasting {
-  id: string
-  title: string
-  creator_name?: string
-  status?: string
-}
-
 function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) => void }) {
   const [roster, setRoster] = useState<AgencyRosterItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [manageModel, setManageModel] = useState<AgencyRosterItem | null>(null)
-  const [proposeCastings, setProposeCastings] = useState<ApiCasting[]>([])
+  const [proposeCastings, setProposeCastings] = useState<ApiCastingRow[]>([])
   const [loadingCastings, setLoadingCastings] = useState(false)
   const [proposingId, setProposingId] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const [applications, setApplications] = useState<Array<{
+    id: string; modelId: string; status: string; note: string | null;
+    modelName: string; modelAvatar: string | null; modelUsername: string
+  }>>([])
+  const [showApplications, setShowApplications] = useState(false)
 
   const fetchRoster = useCallback(async () => {
     setLoading(true)
@@ -338,9 +513,9 @@ function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) =>
     setProposeCastings([])
     const res = await api.getCastings({ status: "active", limit: 30 })
     setLoadingCastings(false)
-    if (res.data?.castings) {
-      const list = (res.data.castings as ApiCasting[]) ?? []
-      setProposeCastings(list)
+    const castData = res.data as { castings?: ApiCastingRow[] } | undefined
+    if (castData?.castings) {
+      setProposeCastings(castData.castings)
     }
   }, [])
 
@@ -351,6 +526,30 @@ function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) =>
     setProposingId(null)
     setProposeCastings((prev) => prev.filter((c) => c.id !== castingId))
   }, [manageModel, proposingId])
+
+  const handleRemoveModel = useCallback(async (modelId: string) => {
+    setRemovingId(modelId)
+    await api.removeModelFromAgency(modelId)
+    setRemovingId(null)
+    setManageModel(null)
+    fetchRoster()
+  }, [fetchRoster])
+
+  const fetchApplications = useCallback(async () => {
+    const res = await api.getAgencyApplications("PENDING")
+    const data = res.data as { applications?: typeof applications } | undefined
+    if (data?.applications) setApplications(data.applications)
+  }, [])
+
+  const handleRespondToApp = useCallback(async (appId: string, action: "accept" | "reject") => {
+    await api.respondToAgencyApplication(appId, action)
+    setApplications((prev) => prev.filter((a) => a.id !== appId))
+    if (action === "accept") fetchRoster()
+  }, [fetchRoster])
+
+  useEffect(() => {
+    if (showApplications) fetchApplications()
+  }, [showApplications, fetchApplications])
 
   if (loading) {
     return (
@@ -384,7 +583,63 @@ function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) =>
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground px-4">{roster.length} model{roster.length !== 1 ? "s" : ""} in your roster</p>
+      {/* Applications toggle */}
+      <div className="flex items-center gap-2 px-4">
+        <p className="text-sm text-muted-foreground flex-1">{roster.length} model{roster.length !== 1 ? "s" : ""} in your roster</p>
+        <Button
+          variant={showApplications ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowApplications(!showApplications)}
+        >
+          <Bell className="w-3.5 h-3.5 mr-1" />
+          Applications
+          {applications.length > 0 && (
+            <span className="ml-1 bg-destructive text-destructive-foreground rounded-full text-[10px] w-4 h-4 flex items-center justify-center">
+              {applications.length}
+            </span>
+          )}
+        </Button>
+      </div>
+
+      {/* Pending applications */}
+      <AnimatePresence>
+        {showApplications && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden px-4"
+          >
+            {applications.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No pending applications</p>
+            ) : (
+              <div className="space-y-2 py-2">
+                {applications.map((app) => (
+                  <Card key={app.id} className="p-3 flex items-center gap-3">
+                    <Avatar className="w-10 h-10">
+                      <AvatarImage src={app.modelAvatar ?? "/placeholder.svg"} />
+                      <AvatarFallback>{app.modelName[0]}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{app.modelName}</p>
+                      <p className="text-xs text-muted-foreground">@{app.modelUsername}</p>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Button size="sm" className="h-7 text-xs" onClick={() => handleRespondToApp(app.id, "accept")}>
+                        <Check className="w-3 h-3 mr-1" />
+                        Accept
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleRespondToApp(app.id, "reject")}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="px-4 pb-4 pinterest-masonry">
         {roster.map((model) => (
           <Card
@@ -395,7 +650,6 @@ function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) =>
               className="cursor-pointer"
               onClick={() => handleModelClick(model)}
             >
-            {/* Pin-style: avatar/image on top */}
             <div className="aspect-[3/4] bg-muted relative flex items-center justify-center">
               <img
                 src={model.avatarUrl ?? "/placeholder-user.jpg"}
@@ -414,7 +668,6 @@ function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) =>
                 )}
               </div>
             </div>
-            {/* Content below image */}
             <div className="p-3">
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-sm truncate flex-1">{model.displayName}</span>
@@ -473,10 +726,31 @@ function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) =>
         <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-hidden flex flex-col">
           <SheetHeader>
             <SheetTitle>
-              {manageModel ? `Propose ${manageModel.displayName} to event` : "Propose to event"}
+              {manageModel ? `Manage ${manageModel.displayName}` : "Manage Model"}
             </SheetTitle>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto py-4">
+            {/* Remove from roster */}
+            {manageModel && (
+              <div className="px-2 mb-4">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  disabled={removingId === manageModel.id}
+                  onClick={() => handleRemoveModel(manageModel.id)}
+                >
+                  {removingId === manageModel.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                  ) : (
+                    <X className="w-4 h-4 mr-1" />
+                  )}
+                  Remove from Roster
+                </Button>
+              </div>
+            )}
+
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-2 mb-2">Propose to Event</p>
             {loadingCastings ? (
               <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -492,7 +766,7 @@ function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) =>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-sm truncate">{c.title}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {c.creator_name ?? "Brand"}
+                          {c.creatorName ?? "Brand"}
                         </p>
                       </div>
                       <Button
@@ -579,17 +853,16 @@ function CastingCard({
 
 function AllSubmissionsView({
   castings,
+  submissions,
   onSelectCasting,
   onViewProfile,
 }: {
   castings: Casting[]
+  submissions: CastingApplication[]
   onSelectCasting: (casting: Casting) => void
   onViewProfile?: (user: User) => void
 }) {
-  const { getApplicationsForCasting } = useStore()
-  const allApplications = castings.flatMap((c) => getApplicationsForCasting(c.id))
-
-  if (allApplications.length === 0) {
+  if (submissions.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
         <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
@@ -600,7 +873,7 @@ function AllSubmissionsView({
 
   return (
     <div className="space-y-3">
-      {allApplications.map((app) => (
+      {submissions.map((app) => (
         <Card
           key={app.id}
           className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
@@ -658,14 +931,64 @@ function CastingSubmissions({
   onBack: () => void
   onViewProfile?: (user: User) => void
 }) {
-  const [filter, setFilter] = useState<"all" | "pending" | "shortlisted" | "accepted">("all")
-  const { getApplicationsForCasting } = useStore()
-  const applications = getApplicationsForCasting(casting.id)
+  const [filter, setFilter] = useState<"all" | "applied" | "shortlisted" | "offered" | "accepted">("all")
+  const [applications, setApplications] = useState<CastingApplication[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
+
+  const fetchSubmissions = useCallback(async () => {
+    setLoading(true)
+    const res = await api.getSubmissions(casting.id)
+    const subData = res.data as { submissions?: ApiSubmissionRow[] } | undefined
+    if (subData?.submissions) {
+      setApplications(subData.submissions.map((s) => apiSubmissionToFrontend(s, casting)))
+    }
+    setLoading(false)
+  }, [casting])
+
+  useEffect(() => {
+    fetchSubmissions()
+  }, [fetchSubmissions])
 
   const filteredApplications = applications.filter((a) => {
     if (filter === "all") return true
     return a.status === filter
   })
+
+  const handleStatusUpdate = useCallback(async (submissionId: string, newStatus: string) => {
+    await api.updateSubmissionStatus(submissionId, newStatus)
+    fetchSubmissions()
+  }, [fetchSubmissions])
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectAll = () => {
+    if (selectedIds.size === filteredApplications.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredApplications.map((a) => a.id)))
+    }
+  }
+
+  const handleBulkAction = async (action: string) => {
+    if (selectedIds.size === 0) return
+    setBulkLoading(true)
+    await api.bulkAction(casting.id, {
+      action,
+      submissionIds: Array.from(selectedIds),
+    })
+    setSelectedIds(new Set())
+    setBulkLoading(false)
+    fetchSubmissions()
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -676,9 +999,8 @@ function CastingSubmissions({
         <h1 className="ml-2 font-semibold truncate">{casting.title}</h1>
       </header>
 
-      {/* Filters */}
       <div className="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar border-b border-border">
-        {(["all", "pending", "shortlisted", "accepted"] as const).map((f) => (
+        {(["all", "applied", "shortlisted", "offered", "accepted"] as const).map((f) => (
           <Button
             key={f}
             variant={filter === f ? "default" : "outline"}
@@ -694,11 +1016,74 @@ function CastingSubmissions({
         ))}
       </div>
 
-      {/* Applications */}
+      {/* Bulk action bar */}
+      {filteredApplications.length > 0 && (
+        <div className="px-4 py-2 flex items-center gap-2 border-b border-border bg-muted/30">
+          <Button variant="ghost" size="sm" className="text-xs" onClick={selectAll}>
+            {selectedIds.size === filteredApplications.length ? "Deselect all" : "Select all"}
+          </Button>
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
+              <div className="ml-auto flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  disabled={bulkLoading}
+                  onClick={() => handleBulkAction("shortlist")}
+                >
+                  Shortlist
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  disabled={bulkLoading}
+                  onClick={() => handleBulkAction("offer")}
+                >
+                  Offer
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs text-red-500"
+                  disabled={bulkLoading}
+                  onClick={() => handleBulkAction("reject")}
+                >
+                  Reject
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="p-4 space-y-3">
-        {filteredApplications.length > 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span>Loading submissions…</span>
+          </div>
+        ) : filteredApplications.length > 0 ? (
           filteredApplications.map((app) => (
-            <ApplicationCard key={app.id} application={app} onViewProfile={onViewProfile} />
+            <div key={app.id} className="flex items-start gap-2">
+              <button
+                className={`mt-3 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                  selectedIds.has(app.id) ? "bg-foreground border-foreground" : "border-muted-foreground/30"
+                }`}
+                onClick={() => toggleSelect(app.id)}
+              >
+                {selectedIds.has(app.id) && (
+                  <svg className="w-3 h-3 text-background" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+              <div className="flex-1 min-w-0">
+                <ApplicationCard application={app} onViewProfile={onViewProfile} onStatusUpdate={handleStatusUpdate} />
+              </div>
+            </div>
           ))
         ) : (
           <div className="text-center py-12 text-muted-foreground">
@@ -713,23 +1098,19 @@ function CastingSubmissions({
 function ApplicationCard({
   application,
   onViewProfile,
+  onStatusUpdate,
 }: {
   application: CastingApplication
   onViewProfile?: (user: User) => void
+  onStatusUpdate: (submissionId: string, status: string) => void
 }) {
-  const { updateApplication } = useStore()
   const [expanded, setExpanded] = useState(false)
+  const [updating, setUpdating] = useState(false)
 
-  const handleShortlist = () => {
-    updateApplication(application.id, { status: "shortlisted", updatedAt: new Date() })
-  }
-
-  const handleAccept = () => {
-    updateApplication(application.id, { status: "accepted", updatedAt: new Date() })
-  }
-
-  const handleReject = () => {
-    updateApplication(application.id, { status: "rejected", updatedAt: new Date() })
+  const handleAction = async (status: string) => {
+    setUpdating(true)
+    await onStatusUpdate(application.id, status)
+    setUpdating(false)
   }
 
   return (
@@ -807,14 +1188,14 @@ function ApplicationCard({
                 </div>
               )}
 
-              {application.status === "pending" && (
+              {(application.status === "applied" || application.status === "pending") && (
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1 bg-transparent" onClick={handleShortlist}>
-                    <Star className="w-4 h-4 mr-1" />
+                  <Button size="sm" variant="outline" className="flex-1 bg-transparent" onClick={() => handleAction("SHORTLISTED")} disabled={updating}>
+                    {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-4 h-4 mr-1" />}
                     Shortlist
                   </Button>
-                  <Button size="sm" variant="outline" className="flex-1 bg-transparent" onClick={handleReject}>
-                    <X className="w-4 h-4 mr-1" />
+                  <Button size="sm" variant="outline" className="flex-1 bg-transparent" onClick={() => handleAction("REJECTED")} disabled={updating}>
+                    {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4 mr-1" />}
                     Decline
                   </Button>
                 </div>
@@ -822,12 +1203,12 @@ function ApplicationCard({
 
               {application.status === "shortlisted" && (
                 <div className="flex gap-2">
-                  <Button size="sm" className="flex-1" onClick={handleAccept}>
-                    <Check className="w-4 h-4 mr-1" />
-                    Accept
+                  <Button size="sm" className="flex-1" onClick={() => handleAction("OFFERED")} disabled={updating}>
+                    {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 mr-1" />}
+                    Send Offer
                   </Button>
-                  <Button size="sm" variant="outline" className="flex-1 bg-transparent" onClick={handleReject}>
-                    <X className="w-4 h-4 mr-1" />
+                  <Button size="sm" variant="outline" className="flex-1 bg-transparent" onClick={() => handleAction("REJECTED")} disabled={updating}>
+                    {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4 mr-1" />}
                     Decline
                   </Button>
                 </div>
@@ -881,11 +1262,11 @@ function BrandProfileView() {
 function CreateCastingSheet({
   open,
   onClose,
-  onAdd,
+  onCreated,
 }: {
   open: boolean
   onClose: () => void
-  onAdd: (casting: Casting) => void
+  onCreated: () => void
 }) {
   const { user } = useAuth()
   const [title, setTitle] = useState("")
@@ -893,49 +1274,38 @@ function CreateCastingSheet({
   const [description, setDescription] = useState("")
   const [location, setLocation] = useState("")
   const [pay, setPay] = useState("")
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = () => {
-    if (!title || !user) return
+  const handleSubmit = async () => {
+    if (!title || !user || submitting) return
+    setSubmitting(true)
 
-    const newCasting: Casting = {
-      id: `c${Date.now()}`,
-      creatorId: user.id,
-      creator: user,
+    const payAmount = Number.parseInt(pay) || 0
+    const res = await api.createCasting({
       title,
-      type,
-      description,
-      location: location || "TBD",
-      dates: {
-        start: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        end: new Date(Date.now() + 31 * 24 * 60 * 60 * 1000),
-      },
-      pay: {
-        amount: Number.parseInt(pay) || 0,
-        currency: "USD",
-        type: pay ? "flat" : "tbd",
-      },
-      requirements: {},
-      deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      status: "active",
-      applicationsCount: 0,
-      shortlistedCount: 0,
-      createdAt: new Date(),
-      images: [],
-      settings: {
-        verifiedOnly: false,
-        maxSubmissionsPerAgency: 10,
-        requireDigitalTwin: false,
-      },
+      type: type.toUpperCase(),
+      description: description || undefined,
+      location: location || undefined,
+      payMin: payAmount || undefined,
+      payMax: payAmount || undefined,
+      startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      endDate: new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString(),
+      deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    })
+
+    const createData = res.data as { casting?: { id: string } } | undefined
+    if (createData?.casting) {
+      await api.activateCasting(createData.casting.id)
     }
 
-    onAdd(newCasting)
-    onClose()
+    setSubmitting(false)
     // Reset form
     setTitle("")
     setType("campaign")
     setDescription("")
     setLocation("")
     setPay("")
+    onCreated()
   }
 
   return (
@@ -1009,8 +1379,15 @@ function CreateCastingSheet({
             />
           </div>
 
-          <Button className="w-full h-12" onClick={handleSubmit} disabled={!title}>
-            Create Casting
+          <Button className="w-full h-12" onClick={handleSubmit} disabled={!title || submitting}>
+            {submitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Creating…
+              </>
+            ) : (
+              "Create Casting"
+            )}
           </Button>
         </div>
       </SheetContent>

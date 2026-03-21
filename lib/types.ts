@@ -40,14 +40,14 @@ export interface User {
 }
 
 export interface ModelMeasurements {
-  height: string
-  bust: string
-  waist: string
-  hips: string
-  shoeSize: string
+  height?: string
+  bust?: string
+  waist?: string
+  hips?: string
+  shoeSize?: string
   dressSize?: string
-  hairColor: string
-  eyeColor: string
+  hairColor?: string
+  eyeColor?: string
   heightCm?: number
 }
 
@@ -59,12 +59,25 @@ export interface AvailabilitySlot {
 export interface DigitalTwin {
   id: string
   modelId: string
-  status: "pending" | "processing" | "complete" | "failed"
+  status: "none" | "pending" | "processing" | "ready" | "complete" | "failed"
   createdAt: Date
   updatedAt: Date
   headScan?: string
   fullBodyScan?: string
+  previewUrl?: string
+  inputImages?: string[]
   attributes?: DigitalTwinAttributes
+}
+
+export interface FacialAnalysis {
+  symmetryScore: number
+  goldenRatioScore: number
+  facialThirds: { upper: number; middle: number; lower: number }
+  jawAngle: number
+  eyeSpacing: "close" | "ideal" | "wide"
+  noseBridgeRatio: number
+  lipToFaceRatio: number
+  overallHarmony: number
 }
 
 export interface DigitalTwinAttributes {
@@ -82,6 +95,7 @@ export interface DigitalTwinAttributes {
   shoulderWidth: string
   armLength: string
   legLength: string
+  analysis?: FacialAnalysis
 }
 
 export interface ModelMetrics {
@@ -104,7 +118,7 @@ export interface ModelMetrics {
 // Casting system types
 export type CastingType = "runway" | "campaign" | "editorial" | "commercial" | "event" | "fitting"
 export type CastingStatus = "draft" | "active" | "closed" | "in_review" | "completed"
-export type ApplicationStatus = "pending" | "shortlisted" | "accepted" | "rejected" | "withdrawn"
+export type ApplicationStatus = "pending" | "applied" | "submitted" | "shortlisted" | "offered" | "accepted" | "declined" | "confirmed" | "rejected" | "withdrawn"
 
 export interface Casting {
   id: string
@@ -154,7 +168,7 @@ export interface ModelRequirements {
 export interface CastingApplication {
   id: string
   castingId: string
-  casting: Casting
+  casting?: Casting
   modelId: string
   model: User
   agencyId?: string // Added for agency submissions

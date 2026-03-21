@@ -70,18 +70,16 @@ export function ActiveCastings({ onViewCasting, onViewAll }: ActiveCastingsProps
               className="shrink-0"
             >
               <Card
-                className="w-[280px] overflow-hidden cursor-pointer hover:bg-muted/30 transition-colors"
+                className="w-[280px] overflow-hidden cursor-pointer hover:bg-muted/30 transition-colors !p-0 !gap-0"
                 onClick={() => onViewCasting(casting)}
               >
-                {/* Casting image or gradient header */}
-                <div className="h-24 bg-gradient-to-br from-muted to-muted/50 relative">
-                  {casting.images?.[0] && (
-                    <img
-                      src={casting.images[0] || "/placeholder.svg"}
-                      alt={casting.title}
-                      className="w-full h-full object-cover"
-                    />
-                  )}
+                {/* Casting image */}
+                <div className="aspect-[16/10] bg-muted relative overflow-hidden">
+                  <img
+                    src={casting.images?.[0] || "/placeholder.svg"}
+                    alt={casting.title}
+                    className="w-full h-full object-cover"
+                  />
                   <div className="absolute top-2 left-2 flex gap-1">
                     <Badge variant="secondary" className="text-[10px] h-5 bg-background/90 backdrop-blur-sm">
                       {typeLabels[casting.type]}

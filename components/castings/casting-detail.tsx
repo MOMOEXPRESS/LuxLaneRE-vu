@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useStore } from "@/lib/store-context"
 import { mockUsers, getUserLimits } from "@/lib/mock-data"
 import { FitScorePanel } from "@/components/ai/fit-score-panel"
+import { calculateFitScore } from "@/lib/ai-matching"
 import {
   ArrowLeft,
   MapPin,
@@ -31,6 +32,7 @@ import {
   Share2,
 } from "lucide-react"
 import { api } from "@/lib/api-client"
+import { CastingAnalytics } from "@/components/analytics/casting-analytics"
 import { format, formatDistanceToNow } from "date-fns"
 
 interface CastingDetailProps {
@@ -83,7 +85,9 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
 
   useEffect(() => {
     fetchSubmissionAndSaved()
-  }, [fetchSubmissionAndSaved])
+    // Track casting view
+    api.trackCastingView(casting.id)
+  }, [fetchSubmissionAndSaved, casting.id])
 
   const handleShare = () => {
     const url = typeof window !== "undefined" ? `${window.location.origin}/castings/${casting.id}` : ""
@@ -579,6 +583,11 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
             }}
             title="AI Top Matches"
           />
+        )}
+
+        {/* Casting Analytics — Creator only */}
+        {isCreator && (
+          <CastingAnalytics castingId={casting.id} />
         )}
 
         {/* Similar Castings */}

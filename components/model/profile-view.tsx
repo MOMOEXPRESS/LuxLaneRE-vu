@@ -14,6 +14,12 @@ import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api-client"
 import { useStore } from "@/lib/store-context"
 import type { User, Casting } from "@/lib/types"
+import { AvailabilityCalendar } from "./availability-calendar"
+import { JobHistory } from "./job-history"
+import { ShareProfile } from "./share-profile"
+import { ProfileAnalytics } from "@/components/analytics/profile-analytics"
+import { EarningsDashboard } from "@/components/analytics/earnings-dashboard"
+import { StoryHighlights } from "@/components/stories/story-highlights"
 import {
   BadgeCheck,
   MapPin,
@@ -26,21 +32,26 @@ import {
   UserPlus,
   Star,
   TrendingUp,
-  Scan,
-  RotateCcw,
-  ZoomIn,
-  ZoomOut,
-  CheckCircle2,
-  Clock,
   Globe,
   Briefcase,
   X,
   ChevronLeft,
   ChevronRight,
   Plus,
+  Send,
+  CheckCircle,
+  Users,
+  MoreHorizontal,
+  ShieldAlert,
+  Ban,
+  Heart,
+  Trash2,
+  GripVertical,
 } from "lucide-react"
+import { mockUsers } from "@/lib/mock-data"
+import { DigitalTwinSection } from "@/components/digital-twin/digital-twin-section"
 
-type ProfileTab = "portfolio" | "posts" | "details" | "availability"
+type ProfileTab = "portfolio" | "posts" | "details" | "availability" | "analytics" | "earnings"
 
 interface ProfileViewProps {
   user?: User
@@ -69,9 +80,6 @@ export function ProfileView({
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [showInviteSheet, setShowInviteSheet] = useState(false)
   const [showEditDetailsSheet, setShowEditDetailsSheet] = useState(false)
-  const [twinRotation, setTwinRotation] = useState(0)
-  const [twinZoom, setTwinZoom] = useState(1)
-  const [twinTab, setTwinTab] = useState<"head" | "body" | "measurements">("head")
   const [detailsSaving, setDetailsSaving] = useState(false)
   const [detailsError, setDetailsError] = useState<string | null>(null)
   const [showAddPortfolioSheet, setShowAddPortfolioSheet] = useState(false)
@@ -79,13 +87,102 @@ export function ProfileView({
   const [addPortfolioSaving, setAddPortfolioSaving] = useState(false)
   const [addPortfolioError, setAddPortfolioError] = useState<string | null>(null)
 
+  const [hasAppliedToAgency, setHasAppliedToAgency] = useState(false)
+
+  // Block/Report/Save state
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
+  const [showReportSheet, setShowReportSheet] = useState(false)
+  const [reportReason, setReportReason] = useState("")
+  const [reportDetails, setReportDetails] = useState("")
+  const [reportSending, setReportSending] = useState(false)
+  const [reportSent, setReportSent] = useState(false)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [isSavedModel, setIsSavedModel] = useState(false)
+
+  // Portfolio management state
+  const [editingPortfolio, setEditingPortfolio] = useState(false)
+  const [portfolioItems, setPortfolioItems] = useState<Array<{ id: string; url: string }>>([])
+  const [deletingMedia, setDeletingMedia] = useState<string | null>(null)
+
   const user = profileUser || currentUser
   const isBrandOrAgency = currentUser?.role === "brand" || currentUser?.role === "agency"
+
+  // Check block status + track profile view for non-own profiles
+  useEffect(() => {
+    if (!isOwn && user?.username) {
+      api.checkBlocked(user.username).then((res) => {
+        const data = res.data as { blocked?: boolean } | undefined
+        if (data) setIsBlocked(!!data.blocked)
+      })
+      // Track profile view
+      api.trackProfileView(user.id, "direct")
+    }
+  }, [isOwn, user?.username, user?.id])
+
+  const handleBlock = async () => {
+    if (!user) return
+    if (isBlocked) {
+      await api.unblockUser(user.username)
+      setIsBlocked(false)
+    } else {
+      await api.blockUser(user.username)
+      setIsBlocked(true)
+    }
+    setShowMoreMenu(false)
+  }
+
+  const handleReport = async () => {
+    if (!user || !reportReason) return
+    setReportSending(true)
+    await api.reportUser(user.username, reportReason, reportDetails || undefined)
+    setReportSending(false)
+    setReportSent(true)
+    setTimeout(() => {
+      setShowReportSheet(false)
+      setReportSent(false)
+      setReportReason("")
+      setReportDetails("")
+    }, 1500)
+  }
+
+  const handleSaveModel = async () => {
+    if (!user) return
+    if (isSavedModel) {
+      await api.unsaveModel(user.id)
+      setIsSavedModel(false)
+    } else {
+      await api.saveModel(user.id)
+      setIsSavedModel(true)
+    }
+  }
+
+  const handleDeletePortfolioItem = async (mediaId: string) => {
+    setDeletingMedia(mediaId)
+    await api.deleteMedia(mediaId)
+    setPortfolioItems((prev) => prev.filter((p) => p.id !== mediaId))
+    setDeletingMedia(null)
+  }
 
   if (!user) return null
 
   // Get user's castings for invite
   const myCastings = castings.filter((c) => c.creatorId === currentUser?.id && c.status === "active")
+
+  // Agency-specific data
+  const isAgency = user.role === "agency"
+  // For agencies, try to find roster from the user object or fallback to mockUsers by username/name match
+  const agencyMockUser = isAgency
+    ? mockUsers.find((mu) => mu.role === "agency" && (mu.username === user.username || mu.id === user.id || mu.name === user.name))
+    : null
+  const rosterIds = user.roster || agencyMockUser?.roster || []
+  const rosterModels = isAgency && rosterIds.length > 0
+    ? mockUsers.filter((u) => rosterIds.includes(u.id))
+    : []
+  // Match agency castings by user ID or by the mockUser ID
+  const agencyCastings = isAgency
+    ? castings.filter((c) => c.creatorId === user.id || (agencyMockUser && c.creatorId === agencyMockUser.id))
+    : []
+  const canApplyToAgency = !isOwn && isAgency && currentUser?.role === "model"
 
   const hasPosts = (user.posts?.length ?? 0) > 0
   const tabs: { id: ProfileTab; label: string; icon: React.ReactNode }[] = [
@@ -93,6 +190,10 @@ export function ProfileView({
     ...(hasPosts ? [{ id: "posts" as const, label: "Posts", icon: <Grid3X3 className="w-4 h-4" /> }] : []),
     { id: "details", label: "Details", icon: <Briefcase className="w-4 h-4" /> },
     { id: "availability", label: "Availability", icon: <Calendar className="w-4 h-4" /> },
+    ...(isOwn ? [
+      { id: "analytics" as const, label: "Analytics", icon: <TrendingUp className="w-4 h-4" /> },
+      { id: "earnings" as const, label: "Earnings", icon: <Star className="w-4 h-4" /> },
+    ] : []),
   ]
 
   const portfolioFilters = ["all", "runway", "editorial", "campaign", "commercial"]
@@ -143,13 +244,51 @@ export function ProfileView({
             <AvatarFallback className="text-2xl">{user.name[0]}</AvatarFallback>
           </Avatar>
           <div className="flex gap-2">
-            <Button variant="outline" size="icon" className="rounded-full bg-transparent">
-              <Share2 className="w-4 h-4" />
-            </Button>
+            {!isOwn && isBrandOrAgency && user.role === "model" && (
+              <Button
+                variant="outline"
+                size="icon"
+                className={`rounded-full bg-transparent ${isSavedModel ? "text-red-500 border-red-500/30" : ""}`}
+                onClick={handleSaveModel}
+              >
+                <Heart className={`w-4 h-4 ${isSavedModel ? "fill-current" : ""}`} />
+              </Button>
+            )}
+            <ShareProfile username={user.username} displayName={user.name} />
             {isOwn && (
               <Button variant="outline" size="icon" className="rounded-full bg-transparent" onClick={onSettingsClick}>
                 <Settings className="w-4 h-4" />
               </Button>
+            )}
+            {!isOwn && (
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full bg-transparent"
+                  onClick={() => setShowMoreMenu(!showMoreMenu)}
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </Button>
+                {showMoreMenu && (
+                  <div className="absolute right-0 top-10 z-50 bg-background border border-border rounded-lg shadow-lg py-1 min-w-[160px]">
+                    <button
+                      className="w-full px-4 py-2.5 text-sm text-left hover:bg-muted flex items-center gap-2"
+                      onClick={() => { setShowReportSheet(true); setShowMoreMenu(false) }}
+                    >
+                      <ShieldAlert className="w-4 h-4" />
+                      Report
+                    </button>
+                    <button
+                      className="w-full px-4 py-2.5 text-sm text-left hover:bg-muted flex items-center gap-2 text-red-500"
+                      onClick={handleBlock}
+                    >
+                      <Ban className="w-4 h-4" />
+                      {isBlocked ? "Unblock" : "Block"}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -217,6 +356,18 @@ export function ProfileView({
             <p className="font-semibold">{user.following.toLocaleString()}</p>
             <p className="text-xs text-muted-foreground">Following</p>
           </div>
+          {isAgency && rosterModels.length > 0 && (
+            <div>
+              <p className="font-semibold">{rosterModels.length}</p>
+              <p className="text-xs text-muted-foreground">Talent</p>
+            </div>
+          )}
+          {isAgency && agencyCastings.length > 0 && (
+            <div>
+              <p className="font-semibold">{agencyCastings.length}</p>
+              <p className="text-xs text-muted-foreground">Castings</p>
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -249,171 +400,122 @@ export function ProfileView({
         )}
       </div>
 
+      {/* Agency: Apply Button */}
+      {canApplyToAgency && (
+        <div className="px-4 py-3">
+          {hasAppliedToAgency ? (
+            <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500/10 text-emerald-400">
+              <CheckCircle className="w-5 h-5" />
+              <span className="font-medium">Application Sent</span>
+            </div>
+          ) : (
+            <Button
+              onClick={() => setHasAppliedToAgency(true)}
+              className="w-full h-12 rounded-xl font-semibold text-base"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Apply to {user.name}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Agency: Talent Roster */}
+      {isAgency && rosterModels.length > 0 && (
+        <div className="px-4 py-4 border-b border-border">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              Talent Roster
+            </h3>
+            <span className="text-sm text-muted-foreground">{rosterModels.length} models</span>
+          </div>
+          <div className="space-y-2">
+            {rosterModels.map((model) => (
+              <div
+                key={model.id}
+                className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+              >
+                <Avatar className="w-12 h-12 ring-1 ring-border">
+                  <AvatarImage src={model.avatar || "/placeholder.svg"} alt={model.name} />
+                  <AvatarFallback>{model.name[0]}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium text-sm">{model.name}</span>
+                    {model.verified && <BadgeCheck className="w-4 h-4 text-emerald-500" />}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{model.location}</p>
+                  {model.measurements?.height && (
+                    <p className="text-xs text-muted-foreground">{model.measurements.height}</p>
+                  )}
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Agency: Active Castings */}
+      {isAgency && agencyCastings.length > 0 && (
+        <div className="px-4 py-4 border-b border-border">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Active Castings
+            </h3>
+            <span className="text-sm text-muted-foreground">{agencyCastings.length}</span>
+          </div>
+          <div className="space-y-2">
+            {agencyCastings.map((casting) => (
+              <div
+                key={casting.id}
+                className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+              >
+                <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted shrink-0">
+                  <img
+                    src={casting.images?.[0] || "/placeholder.svg"}
+                    alt={casting.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm truncate">{casting.title}</span>
+                    <Badge variant="secondary" className="text-[10px] shrink-0">
+                      {casting.type}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      {casting.location}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {casting.applicationsCount} applicants
+                    {casting.pay.amount > 0 && ` · ${casting.pay.currency} ${casting.pay.amount.toLocaleString()}`}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Digital Twin Section - Model Specific */}
       {user.role === "model" && (
         <div className="px-4 pb-4">
-          <Card className="overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <div className="flex items-center gap-2">
-                <Scan className="w-5 h-5" />
-                <h3 className="font-semibold">Digital Twin</h3>
-              </div>
-              {user.digitalTwin?.status === "complete" ? (
-                <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                  Available
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-muted-foreground">
-                  Not Created
-                </Badge>
-              )}
-            </div>
-
-            {user.digitalTwin?.status === "complete" ? (
-              <>
-                {/* Twin Viewer Tabs */}
-                <div className="flex border-b border-border">
-                  {(["head", "body", "measurements"] as const).map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setTwinTab(tab)}
-                      className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                        twinTab === tab ? "text-foreground border-b-2 border-foreground" : "text-muted-foreground"
-                      }`}
-                    >
-                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                    </button>
-                  ))}
-                </div>
-
-                {/* 3D Viewer Area */}
-                {twinTab !== "measurements" && (
-                  <div className="relative aspect-square bg-gradient-to-b from-muted/30 to-muted/60">
-                    {/* Grid Background */}
-                    <div
-                      className="absolute inset-0 opacity-20"
-                      style={{
-                        backgroundImage:
-                          "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",
-                        backgroundSize: "20px 20px",
-                      }}
-                    />
-
-                    {/* 3D Model Placeholder */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <motion.div
-                        animate={{ rotateY: twinRotation }}
-                        style={{
-                          transformStyle: "preserve-3d",
-                          scale: twinZoom,
-                        }}
-                        transition={{ type: "spring", stiffness: 100 }}
-                        className={twinTab === "head" ? "w-40 h-40" : "w-32 h-56"}
-                      >
-                        <div
-                          className={`w-full h-full ${
-                            twinTab === "head" ? "rounded-full" : "rounded-lg"
-                          } bg-gradient-to-br from-foreground/10 to-foreground/5 border border-border/50 flex items-center justify-center`}
-                        >
-                          <Scan className="w-12 h-12 text-muted-foreground/50" />
-                        </div>
-                      </motion.div>
-                    </div>
-
-                    {/* Viewer Controls */}
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-background/90 backdrop-blur-sm rounded-full p-1 shadow-lg">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 rounded-full"
-                        onClick={() => setTwinRotation((r) => r - 45)}
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 rounded-full"
-                        onClick={() => setTwinZoom((z) => Math.max(0.5, z - 0.25))}
-                      >
-                        <ZoomOut className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 rounded-full"
-                        onClick={() => setTwinZoom((z) => Math.min(2, z + 0.25))}
-                      >
-                        <ZoomIn className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Measurements Tab */}
-                {twinTab === "measurements" && user.digitalTwin?.attributes && (
-                  <div className="p-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Precise Height</p>
-                        <p className="font-semibold">{user.digitalTwin.attributes.preciseHeight}</p>
-                      </div>
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Chest</p>
-                        <p className="font-semibold">{user.digitalTwin.attributes.preciseChest}</p>
-                      </div>
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Waist</p>
-                        <p className="font-semibold">{user.digitalTwin.attributes.preciseWaist}</p>
-                      </div>
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Hips</p>
-                        <p className="font-semibold">{user.digitalTwin.attributes.preciseHips}</p>
-                      </div>
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Shoulders</p>
-                        <p className="font-semibold">{user.digitalTwin.attributes.shoulderWidth}</p>
-                      </div>
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Arm Length</p>
-                        <p className="font-semibold">{user.digitalTwin.attributes.armLength}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Face/Body Attributes */}
-                {twinTab === "head" && user.digitalTwin?.attributes && (
-                  <div className="p-4 border-t border-border">
-                    <p className="text-xs text-muted-foreground mb-2">Extracted Attributes</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="secondary">{user.digitalTwin.attributes.faceShape} face</Badge>
-                      <Badge variant="secondary">{user.digitalTwin.attributes.skinTone} skin</Badge>
-                      <Badge variant="secondary">{user.digitalTwin.attributes.eyeColor} eyes</Badge>
-                      <Badge variant="secondary">{user.digitalTwin.attributes.jawline} jawline</Badge>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="p-6 text-center">
-                <div className="w-16 h-16 rounded-full bg-muted mx-auto mb-4 flex items-center justify-center">
-                  <Scan className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Create a 3D digital representation for enhanced casting matches
-                </p>
-                {isOwn && (
-                  <Button variant="outline" className="w-full bg-transparent">
-                    Create Digital Twin
-                  </Button>
-                )}
-              </div>
-            )}
-          </Card>
+          <DigitalTwinSection user={user} isOwn={isOwn} />
         </div>
       )}
+
+      {/* Story Highlights */}
+      <div className="px-4 pb-2">
+        <StoryHighlights userId={user.id} isOwn={isOwn} />
+      </div>
 
       {/* Tabs Navigation */}
       {user.role === "model" && (
@@ -454,6 +556,30 @@ export function ProfileView({
                   ))}
                 </div>
 
+                {/* Portfolio Edit Toggle */}
+                {isOwn && user.role === "model" && allImages.length > 0 && (
+                  <div className="flex justify-end px-2 mb-2">
+                    <Button
+                      variant={editingPortfolio ? "default" : "ghost"}
+                      size="sm"
+                      className="text-xs"
+                      onClick={async () => {
+                        if (!editingPortfolio) {
+                          // Fetch media assets with IDs for editing
+                          const res = await api.getMedia(user.id, "PORTFOLIO")
+                          const data = res.data as { assets?: Array<{ id: string; url: string; sortOrder?: number }> } | undefined
+                          if (data?.assets) {
+                            setPortfolioItems(data.assets.map((a) => ({ id: a.id, url: a.url })))
+                          }
+                        }
+                        setEditingPortfolio(!editingPortfolio)
+                      }}
+                    >
+                      {editingPortfolio ? "Done" : <><Edit className="w-3 h-3 mr-1" /> Manage</>}
+                    </Button>
+                  </div>
+                )}
+
                 {/* Portfolio Grid */}
                 <div className="grid grid-cols-3 gap-0.5 p-0.5">
                   {isOwn && user.role === "model" && (
@@ -467,26 +593,60 @@ export function ProfileView({
                       <span className="text-xs font-medium">Add photo</span>
                     </motion.button>
                   )}
-                  {allImages.map((img, i) => (
-                    <motion.button
-                      key={i}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: i * 0.03 }}
-                      className="aspect-[3/4] bg-muted relative group overflow-hidden"
-                      onClick={() => {
-                        setLightboxImage(img)
-                        setLightboxIndex(i)
-                      }}
-                    >
-                      <img
-                        src={img || "/placeholder.svg"}
-                        alt={`Portfolio ${i + 1}`}
-                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                      />
-                    </motion.button>
-                  ))}
-                  {allImages.length === 0 && !(isOwn && user.role === "model") && (
+                  {editingPortfolio ? (
+                    // Edit mode: show portfolio items with delete buttons
+                    portfolioItems.map((item, i) => (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.03 }}
+                        className="aspect-[3/4] bg-muted relative group overflow-hidden"
+                      >
+                        <img
+                          src={item.url || "/placeholder.svg"}
+                          alt={`Portfolio ${i + 1}`}
+                          className="w-full h-full object-cover opacity-75"
+                        />
+                        <button
+                          className="absolute top-1 right-1 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg hover:bg-red-600"
+                          onClick={() => handleDeletePortfolioItem(item.id)}
+                          disabled={deletingMedia === item.id}
+                        >
+                          {deletingMedia === item.id ? (
+                            <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                        <div className="absolute bottom-1 left-1 w-6 h-6 rounded bg-black/50 text-white flex items-center justify-center text-xs font-bold">
+                          {i + 1}
+                        </div>
+                      </motion.div>
+                    ))
+                  ) : (
+                    // Normal view mode
+                    allImages.map((img, i) => (
+                      <motion.button
+                        key={i}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.03 }}
+                        className="aspect-[3/4] bg-muted relative group overflow-hidden"
+                        onClick={() => {
+                          setLightboxImage(img)
+                          setLightboxIndex(i)
+                        }}
+                      >
+                        <img
+                          src={img || "/placeholder.svg"}
+                          alt={`Portfolio ${i + 1}`}
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        />
+                      </motion.button>
+                    ))
+                  )}
+                  {allImages.length === 0 && !editingPortfolio && !(isOwn && user.role === "model") && (
                     <div className="col-span-3 py-12 text-center text-muted-foreground">No portfolio images yet</div>
                   )}
                 </div>
@@ -699,37 +859,37 @@ export function ProfileView({
                   )}
                 </Card>
 
-                {/* Mini Calendar */}
-                <Card className="p-4">
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Upcoming Availability
-                  </h3>
-                  <div className="flex gap-2 overflow-x-auto pb-2">
-                    {Array.from({ length: 7 }).map((_, i) => {
-                      const date = new Date()
-                      date.setDate(date.getDate() + i)
-                      const isAvailable = i !== 2 && i !== 5
-                      return (
-                        <div
-                          key={i}
-                          className={`flex-shrink-0 w-12 py-2 rounded-lg text-center ${
-                            isAvailable ? "bg-emerald-500/10" : "bg-muted"
-                          }`}
-                        >
-                          <p className="text-xs text-muted-foreground">
-                            {date.toLocaleDateString("en", { weekday: "short" })}
-                          </p>
-                          <p className="font-semibold">{date.getDate()}</p>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <div className="flex items-center gap-2 mt-3 text-sm text-muted-foreground">
-                    <Clock className="w-4 h-4" />
-                    <span>Next available: Tomorrow</span>
-                  </div>
-                </Card>
+                {/* Full Calendar */}
+                <AvailabilityCalendar userId={user.id} isOwn={isOwn} />
+
+                {/* Job History — only for own profile */}
+                {isOwn && user.role === "model" && <JobHistory />}
+              </motion.div>
+            )}
+
+            {/* Analytics tab — own profile only */}
+            {activeTab === "analytics" && isOwn && (
+              <motion.div
+                key="analytics"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="p-4"
+              >
+                <ProfileAnalytics />
+              </motion.div>
+            )}
+
+            {/* Earnings tab — own profile only */}
+            {activeTab === "earnings" && isOwn && (
+              <motion.div
+                key="earnings"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="p-4"
+              >
+                <EarningsDashboard />
               </motion.div>
             )}
           </AnimatePresence>
@@ -877,6 +1037,59 @@ export function ProfileView({
               </Button>
             </div>
           </form>
+        </SheetContent>
+      </Sheet>
+
+      {/* Report User Sheet */}
+      <Sheet open={showReportSheet} onOpenChange={setShowReportSheet}>
+        <SheetContent side="bottom" className="h-auto max-h-[70vh] rounded-t-2xl">
+          <SheetHeader>
+            <SheetTitle>Report {user.name}</SheetTitle>
+          </SheetHeader>
+          {reportSent ? (
+            <div className="flex flex-col items-center py-8 gap-3">
+              <CheckCircle className="w-12 h-12 text-emerald-500" />
+              <p className="font-medium">Report submitted</p>
+              <p className="text-sm text-muted-foreground">We'll review this report shortly.</p>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <Label>Reason</Label>
+                <div className="flex flex-wrap gap-2">
+                  {["spam", "harassment", "inappropriate", "fake", "other"].map((r) => (
+                    <Button
+                      key={r}
+                      type="button"
+                      variant={reportReason === r ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setReportReason(r)}
+                      className="capitalize"
+                    >
+                      {r}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reportDetails">Details (optional)</Label>
+                <Input
+                  id="reportDetails"
+                  placeholder="Tell us more about the issue..."
+                  value={reportDetails}
+                  onChange={(e) => setReportDetails(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleReport} disabled={!reportReason || reportSending}>
+                  {reportSending ? "Sending..." : "Submit report"}
+                </Button>
+                <Button variant="outline" onClick={() => setShowReportSheet(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
 

@@ -173,34 +173,36 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
           className="px-3 py-4"
         >
           {filteredCastings.length > 0 ? (
-            <div className="pinterest-masonry-castings">
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-1.5 auto-rows-auto">
               {filteredCastings.map((casting, index) => {
                 const appStatus = getApplicationStatus(casting.id)
+                const isFeatured = index % 5 === 0
                 return (
                   <motion.div
                     key={casting.id}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: Math.min(index * 0.03, 0.25) }}
+                    className={isFeatured ? "col-span-2 row-span-2" : ""}
                   >
                     <Card
-                      className="overflow-hidden cursor-pointer rounded-2xl border-0 bg-zinc-900 shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                      className="overflow-hidden cursor-pointer rounded-xl border-0 bg-zinc-900 shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.97] !p-0 !gap-0 h-full"
                       onClick={() => onViewCasting(casting)}
                     >
-                      {/* Pin: image dominant */}
-                      <div className="relative aspect-[3/4] bg-zinc-800 min-h-0">
+                      {/* Compact tile image */}
+                      <div className={`relative bg-zinc-800 ${isFeatured ? "h-full" : "aspect-square"}`}>
                         <img
                           src={casting.images?.[0] || "/placeholder.svg"}
                           alt={casting.title}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1">
-                          <span className="rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+                        <div className={`absolute top-1.5 left-1.5 flex items-center gap-1`}>
+                          <span className={`rounded bg-black/60 backdrop-blur-sm font-medium text-white ${isFeatured ? "px-2 py-1 text-xs" : "px-1.5 py-0.5 text-[9px]"}`}>
                             {typeLabels[casting.type]}
                           </span>
                           {appStatus && (
                             <span
-                              className={`rounded-md px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm ${
+                              className={`rounded font-medium backdrop-blur-sm ${isFeatured ? "px-2 py-1 text-xs" : "px-1.5 py-0.5 text-[9px]"} ${
                                 appStatus === "shortlisted"
                                   ? "bg-amber-500/90 text-black"
                                   : appStatus === "accepted"
@@ -212,17 +214,29 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
                             </span>
                           )}
                         </div>
+                        {/* Featured card has overlay caption at bottom of image */}
+                        {isFeatured && (
+                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 pt-8">
+                            <h3 className="font-semibold text-sm text-white line-clamp-2 leading-snug">
+                              {casting.title}
+                            </h3>
+                            <p className="mt-0.5 text-xs text-zinc-300 truncate">
+                              {casting.creator.name}
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      {/* Minimal caption: title + source */}
-                      <div className="p-2.5">
-                        <h3 className="font-medium text-xs text-zinc-100 line-clamp-2 leading-snug">
-                          {casting.title}
-                        </h3>
-                        <p className="mt-1 text-[11px] text-zinc-500 truncate">
-                          {casting.creator.name}
-                          {casting.location ? ` · ${casting.location.split(",")[0]}` : ""}
-                        </p>
-                      </div>
+                      {/* Compact caption — only for non-featured cards */}
+                      {!isFeatured && (
+                        <div className="p-1.5">
+                          <h3 className="font-medium text-[10px] text-zinc-100 line-clamp-2 leading-tight">
+                            {casting.title}
+                          </h3>
+                          <p className="mt-0.5 text-[9px] text-zinc-500 truncate">
+                            {casting.creator.name}
+                          </p>
+                        </div>
+                      )}
                     </Card>
                   </motion.div>
                 )
