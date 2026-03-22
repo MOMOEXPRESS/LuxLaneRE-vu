@@ -64,6 +64,8 @@ interface ProfileViewProps {
   onInviteToCasting?: (casting: Casting) => void
   onProfileUpdated?: () => void
   onFollowToggle?: () => void
+  onViewCasting?: (casting: Casting) => void
+  onViewProfile?: (user: User) => void
 }
 
 export function ProfileView({
@@ -74,6 +76,8 @@ export function ProfileView({
   onInviteToCasting,
   onProfileUpdated,
   onFollowToggle,
+  onViewCasting,
+  onViewProfile,
 }: ProfileViewProps) {
   const { user: currentUser } = useAuth()
   const { castings } = useStore()
@@ -467,7 +471,10 @@ export function ProfileView({
             </div>
           ) : (
             <Button
-              onClick={() => setHasAppliedToAgency(true)}
+              onClick={async () => {
+                const res = await api.applyToAgency(user.id)
+                if (!res.error) setHasAppliedToAgency(true)
+              }}
               className="w-full h-12 rounded-xl font-semibold text-base"
             >
               <Send className="w-4 h-4 mr-2" />
@@ -492,6 +499,7 @@ export function ProfileView({
               <div
                 key={model.id}
                 className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+                onClick={() => onViewProfile?.(model)}
               >
                 <Avatar className="w-12 h-12 ring-1 ring-border">
                   <AvatarImage src={model.avatar || "/placeholder.svg"} alt={model.name} />
@@ -529,6 +537,7 @@ export function ProfileView({
               <div
                 key={casting.id}
                 className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+                onClick={() => onViewCasting?.(casting)}
               >
                 <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted shrink-0">
                   <img

@@ -36,6 +36,7 @@ import {
 } from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
 import { SettingsView } from "@/components/settings/settings-view"
+import { InboxView } from "@/components/model/inbox-view"
 
 type BrandTab = "castings" | "submissions" | "messages" | "my-models" | "profile"
 
@@ -415,10 +416,8 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="p-4 text-center py-12 text-muted-foreground"
           >
-            <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>Messages coming soon</p>
+            <InboxView onViewProfile={onViewProfile} />
           </motion.div>
         )}
 

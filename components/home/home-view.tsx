@@ -14,7 +14,8 @@ import { usePosts } from "@/lib/hooks/use-posts"
 import { api } from "@/lib/api-client"
 import { getRecommendedCastingsForModel } from "@/lib/ai-matching"
 import { Card } from "@/components/ui/card"
-import { ChevronRight, Sparkles } from "lucide-react"
+import { CreateStorySheet } from "@/components/stories/create-story-sheet"
+import { ChevronRight, Sparkles, MapPin, DollarSign, Calendar, Clock } from "lucide-react"
 import type { Casting, User } from "@/lib/types"
 
 interface HomeViewProps {
@@ -59,6 +60,9 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
 
   const isModel = user?.role === "model"
 
+  // Story creation state
+  const [showCreateStory, setShowCreateStory] = useState(false)
+
   // Story viewer state
   const [viewingStories, setViewingStories] = useState<{
     userId: string
@@ -77,8 +81,15 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
       {/* Stories Bar */}
       <StoryBar
         onViewStories={(u) => setViewingStories(u)}
-        onCreateStory={() => {
-          // Could open a media picker — for now just a placeholder
+        onCreateStory={() => setShowCreateStory(true)}
+      />
+
+      {/* Create Story Sheet */}
+      <CreateStorySheet
+        open={showCreateStory}
+        onClose={() => setShowCreateStory(false)}
+        onCreated={() => {
+          // Stories will refresh on next feed load
         }}
       />
 
@@ -112,39 +123,68 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
               See all <ChevronRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {recommendedCastings.map(({ casting, fitScore }) => (
               <Card
                 key={casting.id}
-                className="p-3 flex items-center gap-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                className="overflow-hidden cursor-pointer hover:bg-muted/30 transition-colors !p-0 !gap-0"
                 onClick={() => onViewCasting(casting)}
               >
-                <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0">
-                  {casting.images?.[0] && (
+                <div className="flex h-28">
+                  {/* Left: Image + title overlay */}
+                  <div className="relative w-28 shrink-0 bg-muted">
                     <img
-                      src={casting.images[0] || "/placeholder.svg"}
+                      src={casting.images?.[0] || "/placeholder.svg"}
                       alt={casting.title}
                       className="w-full h-full object-cover"
                     />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{casting.title}</p>
-                  <p className="text-xs text-muted-foreground">{casting.creator.name}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <div
-                    className={`text-lg font-bold ${
-                      fitScore.total >= 80
-                        ? "text-emerald-500"
-                        : fitScore.total >= 60
-                          ? "text-sky-500"
-                          : "text-amber-500"
-                    }`}
-                  >
-                    {fitScore.total}%
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
+                      <p className="font-semibold text-[11px] text-white line-clamp-2 leading-tight">{casting.title}</p>
+                      <p className="text-[9px] text-zinc-300 mt-0.5 truncate">{casting.creator.name}</p>
+                    </div>
+                    {/* Match badge */}
+                    <div
+                      className={`absolute top-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                        fitScore.total >= 80
+                          ? "bg-emerald-500/90 text-black"
+                          : fitScore.total >= 60
+                            ? "bg-sky-500/90 text-black"
+                            : "bg-amber-500/90 text-black"
+                      }`}
+                    >
+                      {fitScore.total}%
+                    </div>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">Match</p>
+                  {/* Right: Casting details */}
+                  <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <MapPin className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{casting.location || "Remote"}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <DollarSign className="w-3 h-3 shrink-0" />
+                        <span>{casting.pay ? `€${casting.pay.amount}/${casting.pay.type}` : "TBD"}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Calendar className="w-3 h-3 shrink-0" />
+                        <span>
+                          {casting.dates?.start
+                            ? new Date(casting.dates.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                            : "Flexible"}
+                          {casting.dates?.end && ` – ${new Date(casting.dates.end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-amber-500">
+                      <Clock className="w-3 h-3 shrink-0" />
+                      <span>
+                        {casting.deadline
+                          ? `Deadline: ${new Date(casting.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                          : "Open deadline"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -160,7 +200,7 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
         {postsLoading ? (
           <div className="py-12 text-center text-muted-foreground text-sm">Loading feed…</div>
         ) : feedPosts.length > 0 ? (
-          feedPosts.map((post) => (
+          feedPosts.map((post: any) => (
             <FeedPost
               key={post.id}
               post={post}
