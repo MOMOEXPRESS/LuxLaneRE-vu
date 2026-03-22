@@ -52,21 +52,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Check for existing session on mount
+  // On mount: clear any stale session so user always starts at login
   useEffect(() => {
     if (USE_MOCK_DATA) {
       setIsLoading(false)
       return
     }
 
-    async function checkSession() {
-      const result = await api.getCurrentUser()
-      if (result.data?.user) {
-        setUser(apiUserToUser(result.data.user))
-      }
+    async function init() {
+      // Clear cookies on fresh page load to force login
+      await api.logout()
+      setUser(null)
       setIsLoading(false)
     }
-    checkSession()
+    init()
   }, [])
 
   const refreshUser = useCallback(async () => {
