@@ -11,7 +11,8 @@ import { mockPosts, mockUsers, getCurrentUser } from "@/lib/mock-data"
 import { useStore } from "@/lib/store-context"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
-import { Send, CheckCircle } from "lucide-react"
+import { Send, CheckCircle, Loader2 } from "lucide-react"
+import { api } from "@/lib/api-client"
 
 interface ProfileViewProps {
   userId?: string
@@ -33,6 +34,7 @@ export function ProfileView({ userId, onBack, onSettings, onMessage, onBook, onP
   const [isFollowing, setIsFollowing] = useState(false)
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts")
   const [hasApplied, setHasApplied] = useState(false)
+  const [applyLoading, setApplyLoading] = useState(false)
 
   const userPosts = mockPosts.filter((p) => p.userId === profileUser.id)
   const savedPosts = mockPosts.filter((p) => p.bookmarked)
@@ -80,10 +82,20 @@ export function ProfileView({ userId, onBack, onSettings, onMessage, onBook, onP
             </div>
           ) : (
             <Button
-              onClick={() => setHasApplied(true)}
+              onClick={async () => {
+                setApplyLoading(true)
+                const res = await api.applyToAgency(profileUser.id)
+                setApplyLoading(false)
+                if (!res.error) setHasApplied(true)
+              }}
+              disabled={applyLoading}
               className="w-full h-12 rounded-xl bg-white text-black hover:bg-zinc-200 font-semibold text-base"
             >
-              <Send className="w-4 h-4 mr-2" />
+              {applyLoading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
               Apply to {profileUser.name}
             </Button>
           )}
