@@ -126,7 +126,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    if (!["brand", "agency", "client"].includes(user.role)) {
+    const roleLower = user.role.toLowerCase()
+    if (!["brand", "agency", "client"].includes(roleLower)) {
       return NextResponse.json({ error: "Only brands, agencies, and clients can create castings" }, { status: 403 })
     }
 
