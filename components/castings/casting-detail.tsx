@@ -156,8 +156,13 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
     const res = await api.applyToCasting(casting.id, { note: applicationMessage })
     setApplyLoading(false)
     if (res.error) {
+      if (res.error.includes("Already applied")) {
+        setSubmissionStatus("applied")
+        setShowApplySheet(false)
+      }
       return
     }
+    setShowApplySheet(false)
     setSubmissionStatus("applied")
     const applyData = res.data as { submission?: { id: string } } | undefined
     addApplication({

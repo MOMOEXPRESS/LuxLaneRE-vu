@@ -341,68 +341,29 @@ export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: 
       {/* Dev Panel */}
       {section === "dev" && (
         <div className="p-4 space-y-6">
-          {/* Role Switcher */}
-          <div>
-            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1 flex items-center gap-2">
-              <RefreshCw className="w-3 h-3" />
-              Switch Role
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              {roles.map((role) => (
-                <button
-                  key={role.value}
-                  onClick={() => handleRoleSwitch(role.value)}
-                  className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
-                    user?.role === role.value
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border hover:bg-muted/50"
-                  }`}
-                >
-                  {role.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Verification Switcher */}
+          {/* Account Info */}
           <div>
             <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1 flex items-center gap-2">
               <Shield className="w-3 h-3" />
-              Verification Level
+              Account Info
             </h3>
-            <div className="grid grid-cols-3 gap-2">
-              {verificationLevels.map((level) => (
-                <button
-                  key={level.value}
-                  onClick={() => handleVerificationSwitch(level.value)}
-                  className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
-                    user?.verificationLevel === level.value
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border hover:bg-muted/50"
-                  }`}
-                >
-                  {level.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Simulation Actions */}
-          <div>
-            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1 flex items-center gap-2">
-              <Sparkles className="w-3 h-3" />
-              Simulate Events
-            </h3>
-            <div className="space-y-2">
-              <Button variant="outline" className="w-full justify-start bg-transparent" onClick={simulateBooking}>
-                <span className="mr-2">+</span>
-                Simulate Booking (+5 score)
-              </Button>
-              <Button variant="outline" className="w-full justify-start bg-transparent" onClick={simulateShortlist}>
-                <span className="mr-2">+</span>
-                Simulate Shortlist (+2 score)
-              </Button>
-            </div>
+            <Card className="p-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Role</span>
+                <span className="font-medium capitalize">{user?.role}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Verification</span>
+                <span className="font-medium capitalize">{user?.verificationLevel?.replace("_", " ") || "Unverified"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Username</span>
+                <span className="font-medium">@{user?.username}</span>
+              </div>
+            </Card>
+            <p className="text-xs text-muted-foreground mt-2 px-1">
+              Role and verification are set at account creation and cannot be changed.
+            </p>
           </div>
 
           <div>
