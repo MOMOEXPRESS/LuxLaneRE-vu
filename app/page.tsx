@@ -245,7 +245,8 @@ export default function Home() {
           user={selectedProfile}
           isOwn={false}
           onMessageClick={async () => {
-            const res = await api.startDirectConversation(selectedProfile.id)
+            await api.startDirectConversation(selectedProfile.id)
+            navigateTo("main")
             setActiveTab("inbox")
           }}
           onFollowToggle={async () => {
@@ -262,6 +263,8 @@ export default function Home() {
               },
             })
           }}
+          onViewCasting={(casting) => navigateTo("casting", { casting })}
+          onViewProfile={viewProfile}
         />
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />
       </div>

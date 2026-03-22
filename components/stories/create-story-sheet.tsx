@@ -84,10 +84,10 @@ export function CreateStorySheet({ open, onClose, onCreated }: CreateStorySheetP
     setError(null)
 
     try {
-      // Upload the file first
+      // Upload the file
       const formData = new FormData()
       formData.append("file", selectedFile)
-      formData.append("type", "STORY")
+      formData.append("type", "story")
 
       const uploadRes = await fetch("/api/media/upload", {
         method: "POST",
@@ -99,10 +99,14 @@ export function CreateStorySheet({ open, onClose, onCreated }: CreateStorySheetP
 
       if (uploadRes.ok) {
         const uploadData = await uploadRes.json()
-        mediaUrl = uploadData.url || uploadData.asset?.url
+        mediaUrl = uploadData.url
       } else {
-        // Fallback: use object URL or placeholder
-        mediaUrl = previewUrl || "/placeholder.svg"
+        // If upload fails, store locally as data URL
+        const reader = new FileReader()
+        mediaUrl = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve(reader.result as string)
+          reader.readAsDataURL(selectedFile)
+        })
       }
 
       // Create the story

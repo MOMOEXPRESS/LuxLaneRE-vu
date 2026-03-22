@@ -770,8 +770,8 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
         )}
       </div>
 
-      {/* Fixed Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">{getActionButton()}</div>
+      {/* Fixed Action Bar — sits above bottom nav */}
+      <div className="fixed bottom-14 left-0 right-0 p-4 bg-background border-t border-border z-40">{getActionButton()}</div>
 
       {/* Apply Sheet - Model */}
       {isModel && (

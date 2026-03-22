@@ -223,6 +223,8 @@ export default function PublicProfilePage() {
           loadProfile()
         }}
         onProfileUpdated={loadProfile}
+        onViewCasting={(casting) => router.push(`/?view=casting&id=${casting.id}`)}
+        onViewProfile={(u) => router.push(`/u/${u.username}`)}
       />
     </div>
   )
