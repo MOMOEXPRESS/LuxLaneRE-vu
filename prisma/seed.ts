@@ -1,7 +1,6 @@
 import dotenv from "dotenv"
 import path from "path"
 
-// Load .env and .env.local FIRST so DATABASE_URL is set before Prisma is used (Prisma CLI skips env when prisma.config.ts exists)
 const root = process.cwd()
 dotenv.config({ path: path.join(root, ".env") })
 dotenv.config({ path: path.join(root, ".env.local") })
@@ -13,739 +12,417 @@ if (!process.env.DATABASE_URL) {
 
 import { PrismaClient, Role } from "@prisma/client"
 import bcrypt from "bcryptjs"
-import { TEST_PASSWORD } from "../lib/test-credentials"
+import { TEST_PASSWORD, TEST_ACCOUNTS } from "../lib/test-credentials"
 
 let prisma: PrismaClient
-
-/**
- * Test accounts – password for ALL: see lib/test-credentials.ts (TEST_PASSWORD)
- * Emails: dior@luxlane.demo, elite@luxlane.demo, sofia@luxlane.demo, etc.
- */
 
 async function main() {
   prisma = new PrismaClient()
 
-  // Clear existing data so seed is idempotent (safe to run multiple times)
-  await prisma.postLike.deleteMany()
-  await prisma.postSave.deleteMany()
-  await prisma.comment.deleteMany()
-  await prisma.post.deleteMany()
-  await prisma.message.deleteMany()
-  await prisma.conversationMember.deleteMany()
-  await prisma.conversation.deleteMany()
-  await prisma.notification.deleteMany()
-  await prisma.savedCasting.deleteMany()
-  await prisma.submission.deleteMany()
-  await prisma.castingRequirement.deleteMany()
-  await prisma.casting.deleteMany()
-  await prisma.mediaAsset.deleteMany()
-  await prisma.follow.deleteMany()
-  await prisma.refreshToken.deleteMany()
-  await prisma.userSettings.deleteMany()
-  await prisma.digitalTwin.deleteMany()
-  await prisma.modelProfile.deleteMany()
-  await prisma.agencyProfile.deleteMany()
-  await prisma.brandProfile.deleteMany()
-  await prisma.profile.deleteMany()
-  await prisma.user.deleteMany()
+  console.log("Clearing existing data...")
+  // Clear in dependency order
+  await prisma.$executeRawUnsafe(`
+    DO $$ BEGIN
+      DELETE FROM post_likes;
+      DELETE FROM post_saves;
+      DELETE FROM comments;
+      DELETE FROM posts;
+      DELETE FROM messages;
+      DELETE FROM conversation_members;
+      DELETE FROM conversations;
+      DELETE FROM notifications;
+      DELETE FROM submissions;
+      DELETE FROM casting_requirements;
+      DELETE FROM castings;
+      DELETE FROM media_assets;
+      DELETE FROM follows;
+      DELETE FROM refresh_tokens;
+      DELETE FROM user_settings;
+      DELETE FROM digital_twins;
+      DELETE FROM agency_applications;
+      DELETE FROM availability_dates;
+      DELETE FROM blocks;
+      DELETE FROM reports;
+      DELETE FROM saved_models;
+      DELETE FROM profile_views;
+      DELETE FROM casting_views;
+      DELETE FROM earnings;
+      DELETE FROM story_views;
+      DELETE FROM stories;
+      DELETE FROM story_highlights;
+      DELETE FROM direct_bookings;
+      DELETE FROM room_events;
+      DELETE FROM room_files;
+      DELETE FROM room_schedule_items;
+      DELETE FROM model_profiles;
+      DELETE FROM agency_profiles;
+      DELETE FROM brand_profiles;
+      DELETE FROM client_profiles;
+      DELETE FROM profiles;
+      DELETE FROM users;
+    EXCEPTION WHEN undefined_table THEN NULL;
+    END $$;
+  `)
 
   const hash = await bcrypt.hash(TEST_PASSWORD, 12)
+  console.log("Password hashed. Creating 40 accounts...")
 
-  // 1 Brand
-  const brandUser = await prisma.user.create({
-    data: {
-      email: "dior@luxlane.demo",
-      username: "dior",
-      passwordHash: hash,
-      role: Role.BRAND,
-    },
-  })
-  await prisma.profile.create({
-    data: {
-      userId: brandUser.id,
-      displayName: "Dior",
-      bio: "French luxury fashion house",
-      location: "Paris, France",
-    },
-  })
-  await prisma.brandProfile.create({
-    data: {
-      userId: brandUser.id,
-      brandName: "Dior",
-      website: "https://dior.com",
-      verified: true,
-    },
-  })
-  await prisma.userSettings.create({
-    data: { userId: brandUser.id },
-  })
-
-  // 1 Agency
-  const agencyUser = await prisma.user.create({
-    data: {
-      email: "elite@luxlane.demo",
-      username: "eliteagency",
-      passwordHash: hash,
-      role: Role.AGENCY,
-    },
-  })
-  await prisma.profile.create({
-    data: {
-      userId: agencyUser.id,
-      displayName: "Elite Models Agency",
-      bio: "Top talent representation",
-      location: "New York, NY",
-    },
-  })
-  await prisma.agencyProfile.create({
-    data: {
-      userId: agencyUser.id,
-      agencyName: "Elite Models Agency",
-      website: "https://eliteagency.com",
-      verified: true,
-    },
-  })
-  await prisma.userSettings.create({
-    data: { userId: agencyUser.id },
-  })
-
-  // Second brand: Gucci
-  const gucciUser = await prisma.user.create({
-    data: {
-      email: "gucci@luxlane.demo",
-      username: "gucci",
-      passwordHash: hash,
-      role: Role.BRAND,
-    },
-  })
-  await prisma.profile.create({
-    data: {
-      userId: gucciUser.id,
-      displayName: "Gucci",
-      bio: "Italian luxury fashion house",
-      location: "Florence, Italy",
-      avatarUrl: "/gucci-luxury-fashion-brand-logo-minimal.jpg",
-    },
-  })
-  await prisma.brandProfile.create({
-    data: {
-      userId: gucciUser.id,
-      brandName: "Gucci",
-      website: "https://gucci.com",
-      verified: true,
-    },
-  })
-  await prisma.userSettings.create({
-    data: { userId: gucciUser.id },
-  })
-
-  // Second agency
-  const nextAgencyUser = await prisma.user.create({
-    data: {
-      email: "next@luxlane.demo",
-      username: "nextagency",
-      passwordHash: hash,
-      role: Role.AGENCY,
-    },
-  })
-  await prisma.profile.create({
-    data: {
-      userId: nextAgencyUser.id,
-      displayName: "Next Management",
-      bio: "Global talent agency",
-      location: "London, UK",
-    },
-  })
-  await prisma.agencyProfile.create({
-    data: {
-      userId: nextAgencyUser.id,
-      agencyName: "Next Management",
-      website: "https://nextmanagement.com",
-      verified: true,
-    },
-  })
-  await prisma.userSettings.create({
-    data: { userId: nextAgencyUser.id },
-  })
-
-  // Third brand: Chanel
-  const chanelUser = await prisma.user.create({
-    data: {
-      email: "chanel@luxlane.demo",
-      username: "chanel",
-      passwordHash: hash,
-      role: Role.BRAND,
-    },
-  })
-  await prisma.profile.create({
-    data: {
-      userId: chanelUser.id,
-      displayName: "Chanel",
-      bio: "French luxury house. Timeless elegance.",
-      location: "Paris, France",
-      avatarUrl: "/dior-luxury-fashion-brand-logo-minimal.jpg",
-    },
-  })
-  await prisma.brandProfile.create({
-    data: {
-      userId: chanelUser.id,
-      brandName: "Chanel",
-      website: "https://chanel.com",
-      verified: true,
-    },
-  })
-  await prisma.userSettings.create({
-    data: { userId: chanelUser.id },
-  })
-
-  // Third agency
-  const imgAgencyUser = await prisma.user.create({
-    data: {
-      email: "img@luxlane.demo",
-      username: "imgmodels",
-      passwordHash: hash,
-      role: Role.AGENCY,
-    },
-  })
-  await prisma.profile.create({
-    data: {
-      userId: imgAgencyUser.id,
-      displayName: "IMG Models",
-      bio: "Worldwide talent and fashion",
-      location: "New York, NY",
-    },
-  })
-  await prisma.agencyProfile.create({
-    data: {
-      userId: imgAgencyUser.id,
-      agencyName: "IMG Models",
-      website: "https://imgmodels.com",
-      verified: true,
-    },
-  })
-  await prisma.userSettings.create({
-    data: { userId: imgAgencyUser.id },
-  })
-
-  // Models with different profiles and scores (30 total for model section / scoreboard)
-  const models = [
-    { username: "sofia", displayName: "Sofia M.", bio: "Editorial & runway", location: "Milan", height: "178", hair: "Brunette", eyes: "Brown", experience: "Editorial, Runway", score: 92, avatar: "/elegant-fashion-model-portrait-sofia.jpg" },
-    { username: "lina", displayName: "Lina K.", bio: "High fashion", location: "Paris", height: "180", hair: "Blonde", eyes: "Blue", experience: "Campaign, Editorial", score: 88, avatar: "/professional-model-headshot-woman-brunette.jpg" },
-    { username: "maya", displayName: "Maya S.", bio: "Luxury campaigns", location: "London", height: "176", hair: "Black", eyes: "Dark Brown", experience: "Campaign", score: 85, avatar: "/high-fashion-editorial-model.jpg" },
-    { username: "emma", displayName: "Emma L.", bio: "New face", location: "Berlin", height: "177", hair: "Red", eyes: "Green", experience: "Editorial", score: 78, avatar: "/young-model-headshot-woman-blonde-natural.jpg" },
-    { username: "chiara", displayName: "Chiara R.", bio: "Couture specialist", location: "Rome", height: "179", hair: "Brown", eyes: "Hazel", experience: "Runway, Editorial", score: 90, avatar: "/professional-model-headshot-woman-italian-dark-hai.jpg" },
-    { username: "zoe", displayName: "Zoe T.", bio: "Commercial & fashion", location: "Los Angeles", height: "175", hair: "Blonde", eyes: "Blue", experience: "Campaign, Commercial", score: 82, avatar: "/model-headshot-blonde-european.jpg" },
-    { username: "anna", displayName: "Anna B.", bio: "Editorial & beauty", location: "Copenhagen", height: "177", hair: "Blonde", eyes: "Blue", experience: "Editorial, Beauty", score: 86, avatar: "/young-aspiring-model-portrait-natural.jpg" },
-    { username: "lea", displayName: "Léa M.", bio: "Paris runway", location: "Paris", height: "179", hair: "Brown", eyes: "Brown", experience: "Runway, Campaign", score: 89, avatar: "/italian-supermodel-portrait-elegant.jpg" },
-    { username: "nina", displayName: "Nina K.", bio: "New face Berlin", location: "Berlin", height: "176", hair: "Black", eyes: "Dark Brown", experience: "Editorial", score: 75, avatar: "/professional-model-headshot-woman-brunette.jpg" },
-    { username: "jade", displayName: "Jade W.", bio: "Commercial & editorial", location: "Sydney", height: "175", hair: "Black", eyes: "Brown", experience: "Campaign, Editorial", score: 84, avatar: "/luxury-brand-campaign-model.jpg" },
-    { username: "luna", displayName: "Luna V.", bio: "High fashion new face", location: "Madrid", height: "178", hair: "Dark Brown", eyes: "Green", experience: "Editorial, Runway", score: 81, avatar: "/model-casting-event.jpg" },
-    { username: "sasha", displayName: "Sasha P.", bio: "Beauty & fashion", location: "Moscow", height: "177", hair: "Blonde", eyes: "Blue", experience: "Beauty, Campaign", score: 87, avatar: "/high-fashion-editorial-photo.jpg" },
-    { username: "isla", displayName: "Isla F.", bio: "Editorial & runway", location: "London", height: "177", hair: "Blonde", eyes: "Green", experience: "Runway, Editorial", score: 83, avatar: "/runway-fashion-week-model.jpg" },
-    { username: "freya", displayName: "Freya H.", bio: "Luxury & beauty", location: "Oslo", height: "176", hair: "Red", eyes: "Blue", experience: "Campaign, Beauty", score: 80, avatar: "/vogue-editorial-renaissance.jpg" },
-    { username: "olivia", displayName: "Olivia C.", bio: "New face", location: "Dublin", height: "175", hair: "Brown", eyes: "Brown", experience: "Editorial", score: 74, avatar: "/young-aspiring-model-portrait-natural.jpg" },
-    { username: "mia", displayName: "Mia R.", bio: "Commercial & runway", location: "Barcelona", height: "178", hair: "Dark Brown", eyes: "Hazel", experience: "Campaign, Runway", score: 86, avatar: "/luxury-brand-campaign-photo.jpg" },
-    { username: "elena", displayName: "Elena D.", bio: "High fashion", location: "Athens", height: "179", hair: "Black", eyes: "Brown", experience: "Editorial, Runway", score: 88, avatar: "/high-fashion-editorial-model.jpg" },
-    { username: "camila", displayName: "Camila S.", bio: "Campaign & editorial", location: "São Paulo", height: "176", hair: "Brunette", eyes: "Brown", experience: "Campaign, Editorial", score: 85, avatar: "/elegant-fashion-model-portrait-sofia.jpg" },
-    { username: "valentina", displayName: "Valentina G.", bio: "Couture & runway", location: "Milan", height: "180", hair: "Brown", eyes: "Green", experience: "Runway, Campaign", score: 91, avatar: "/paris-fashion-week-runway-model-walking-couture.jpg" },
-    { username: "beatrice", displayName: "Beatrice L.", bio: "Editorial & beauty", location: "Florence", height: "177", hair: "Brunette", eyes: "Brown", experience: "Editorial, Beauty", score: 84, avatar: "/professional-model-headshot-woman-italian-dark-hai.jpg" },
-    { username: "giulia", displayName: "Giulia B.", bio: "Runway specialist", location: "Rome", height: "178", hair: "Black", eyes: "Dark Brown", experience: "Runway", score: 82, avatar: "/italian-supermodel-portrait-elegant.jpg" },
-    { username: "amelia", displayName: "Amelia W.", bio: "New face London", location: "London", height: "175", hair: "Blonde", eyes: "Blue", experience: "Editorial", score: 76, avatar: "/model-headshot-blonde-european.jpg" },
-    { username: "violet", displayName: "Violet K.", bio: "Beauty & campaign", location: "Melbourne", height: "176", hair: "Auburn", eyes: "Green", experience: "Beauty, Campaign", score: 79, avatar: "/luxury-brand-campaign-model.jpg" },
-    { username: "iris", displayName: "Iris M.", bio: "High fashion editorial", location: "Amsterdam", height: "178", hair: "Blonde", eyes: "Blue", experience: "Editorial, Runway", score: 87, avatar: "/editorial-fashion-photography-black-and-white.jpg" },
-    { username: "noor", displayName: "Noor A.", bio: "Campaign & runway", location: "Dubai", height: "177", hair: "Black", eyes: "Brown", experience: "Campaign, Runway", score: 83, avatar: "/high-fashion-editorial-photo.jpg" },
-    { username: "yuki", displayName: "Yuki T.", bio: "Editorial & commercial", location: "Tokyo", height: "174", hair: "Black", eyes: "Dark Brown", experience: "Editorial, Commercial", score: 81, avatar: "/young-model-headshot-woman-blonde-natural.jpg" },
-    { username: "alexa", displayName: "Alexa P.", bio: "Runway & campaign", location: "New York", height: "179", hair: "Brown", eyes: "Hazel", experience: "Runway, Campaign", score: 89, avatar: "/runway-fashion-week-photo.jpg" },
-    { username: "gemma", displayName: "Gemma N.", bio: "New face", location: "Manchester", height: "176", hair: "Blonde", eyes: "Blue", experience: "Editorial", score: 73, avatar: "/model-casting-event.jpg" },
-    { username: "helen", displayName: "Helen V.", bio: "Luxury campaigns", location: "Vienna", height: "178", hair: "Blonde", eyes: "Green", experience: "Campaign, Editorial", score: 86, avatar: "/professional-model-headshot-woman-brunette.jpg" },
-    { username: "diana", displayName: "Diana R.", bio: "Editorial & runway", location: "Warsaw", height: "177", hair: "Brunette", eyes: "Blue", experience: "Editorial, Runway", score: 85, avatar: "/dior-spring-2024-collection-campaign-elegant.jpg" },
+  // ── BRANDS (10) ──
+  const brandData = [
+    { ...TEST_ACCOUNTS.brands[0], bio: "Maison Christian Dior. Haute Couture, Ready-to-Wear, Beauty.", location: "Paris, France", website: "https://dior.com" },
+    { ...TEST_ACCOUNTS.brands[1], bio: "Founded in Florence in 1921. One of the world's leading luxury fashion brands.", location: "Florence, Italy", website: "https://gucci.com" },
+    { ...TEST_ACCOUNTS.brands[2], bio: "Iconic French fashion house. Timeless elegance since 1910.", location: "Paris, France", website: "https://chanel.com" },
+    { ...TEST_ACCOUNTS.brands[3], bio: "Italian luxury fashion house. Challenging conventions since 1913.", location: "Milan, Italy", website: "https://prada.com" },
+    { ...TEST_ACCOUNTS.brands[4], bio: "British luxury brand. Heritage, innovation, and craftsmanship.", location: "London, UK", website: "https://burberry.com" },
+    { ...TEST_ACCOUNTS.brands[5], bio: "Bold Italian glamour. Versace is not just fashion, it's a lifestyle.", location: "Milan, Italy", website: "https://versace.com" },
+    { ...TEST_ACCOUNTS.brands[6], bio: "Avant-garde fashion house. Pushing boundaries since 1917.", location: "Paris, France", website: "https://balenciaga.com" },
+    { ...TEST_ACCOUNTS.brands[7], bio: "Roman luxury house known for fur, leather goods, and accessories.", location: "Rome, Italy", website: "https://fendi.com" },
+    { ...TEST_ACCOUNTS.brands[8], bio: "French luxury goods manufacturer. Artisanship since 1837.", location: "Paris, France", website: "https://hermes.com" },
+    { ...TEST_ACCOUNTS.brands[9], bio: "Global fashion powerhouse. Art, travel, and craftsmanship.", location: "Paris, France", website: "https://louisvuitton.com" },
   ]
 
-  const createdModels: { id: string; username: string }[] = []
-
-  for (const m of models) {
+  const brands: string[] = []
+  for (const b of brandData) {
     const user = await prisma.user.create({
       data: {
-        email: `${m.username}@luxlane.demo`,
+        email: b.email,
+        username: b.username,
+        passwordHash: hash,
+        displayName: b.name,
+        role: Role.BRAND,
+        profile: { create: { displayName: b.name, bio: b.bio, location: b.location, verificationStatus: "LUXLANE_VERIFIED" } },
+        brandProfile: { create: { brandName: b.name, website: b.website, verified: true } },
+        settings: { create: { darkMode: true } },
+      },
+    })
+    brands.push(user.id)
+    console.log(`  Brand: ${b.name} (${b.email})`)
+  }
+
+  // ── AGENCIES (10) ──
+  const agencyData = [
+    { ...TEST_ACCOUNTS.agencies[0], bio: "The world's leading model management agency. Discovering beauty since 1972.", location: "New York, NY", website: "https://elitemodel.com" },
+    { ...TEST_ACCOUNTS.agencies[1], bio: "Next Model Management. Offices in NY, LA, Paris, Milan, London.", location: "New York, NY", website: "https://nextmodels.com" },
+    { ...TEST_ACCOUNTS.agencies[2], bio: "IMG Models is the international leader in talent discovery.", location: "New York, NY", website: "https://imgmodels.com" },
+    { ...TEST_ACCOUNTS.agencies[3], bio: "Wilhelmina Models. Representing top talent across fashion, beauty, and entertainment.", location: "New York, NY", website: "https://wilhelmina.com" },
+    { ...TEST_ACCOUNTS.agencies[4], bio: "Ford Models. Pioneering the modeling industry since 1946.", location: "New York, NY", website: "https://fordmodels.com" },
+    { ...TEST_ACCOUNTS.agencies[5], bio: "Storm Model Management. Discovering and developing exceptional talent.", location: "London, UK", website: "https://stormmodels.com" },
+    { ...TEST_ACCOUNTS.agencies[6], bio: "Women Management. Premier model agency in NYC, Paris, Milan.", location: "New York, NY", website: "https://womenmanagement.com" },
+    { ...TEST_ACCOUNTS.agencies[7], bio: "Select Model Management. London's leading boutique agency.", location: "London, UK", website: "https://selectmodel.com" },
+    { ...TEST_ACCOUNTS.agencies[8], bio: "Marilyn Agency. Representing the finest talent in Paris.", location: "Paris, France", website: "https://marilynagency.com" },
+    { ...TEST_ACCOUNTS.agencies[9], bio: "DNA Model Management. Curating unique, diverse beauty.", location: "New York, NY", website: "https://dnamodels.com" },
+  ]
+
+  const agencies: string[] = []
+  for (const a of agencyData) {
+    const user = await prisma.user.create({
+      data: {
+        email: a.email,
+        username: a.username,
+        passwordHash: hash,
+        displayName: a.name,
+        role: Role.AGENCY,
+        profile: { create: { displayName: a.name, bio: a.bio, location: a.location, verificationStatus: "LUXLANE_VERIFIED" } },
+        agencyProfile: { create: { agencyName: a.name, website: a.website, verified: true, commissionRate: 20.0 } },
+        settings: { create: { darkMode: true } },
+      },
+    })
+    agencies.push(user.id)
+    console.log(`  Agency: ${a.name} (${a.email})`)
+  }
+
+  // ── MODELS (10) ──
+  const modelData = [
+    { ...TEST_ACCOUNTS.models[0], bio: "International runway model. Paris, Milan, NYC.", location: "Paris, France", heightCm: 180, bustCm: 81, waistCm: 61, hipsCm: 86, hair: "Brunette", eyes: "Green", shoe: "40 EU", agencyIdx: 0, score: 94, exp: ["Dior SS24", "Chanel Resort", "Prada FW23"] },
+    { ...TEST_ACCOUNTS.models[1], bio: "Shanghai-born, London-based. Editorial and high fashion.", location: "London, UK", heightCm: 178, bustCm: 80, waistCm: 60, hipsCm: 87, hair: "Black", eyes: "Brown", shoe: "39 EU", agencyIdx: 1, score: 88, exp: ["Valentino", "Bottega Veneta", "Vogue China Cover"] },
+    { ...TEST_ACCOUNTS.models[2], bio: "Aspiring model. NYC based. Open to collaborations.", location: "Brooklyn, NY", heightCm: 175, bustCm: 81, waistCm: 64, hipsCm: 89, hair: "Blonde", eyes: "Blue", shoe: "38 EU", agencyIdx: 2, score: 42, exp: [] },
+    { ...TEST_ACCOUNTS.models[3], bio: "Scandinavian beauty. Stockholm & Paris.", location: "Stockholm, Sweden", heightCm: 177, bustCm: 83, waistCm: 62, hipsCm: 90, hair: "Blonde", eyes: "Blue", shoe: "39 EU", agencyIdx: 0, score: 78, exp: ["H&M Global", "COS Campaign"] },
+    { ...TEST_ACCOUNTS.models[4], bio: "Milan Fashion Week regular. Gucci, Prada, Versace.", location: "Milan, Italy", heightCm: 178, bustCm: 84, waistCm: 61, hipsCm: 89, hair: "Black", eyes: "Brown", shoe: "39 EU", agencyIdx: 1, score: 87, exp: ["Gucci FW24", "Prada SS24", "Versace Resort"] },
+    { ...TEST_ACCOUNTS.models[5], bio: "Parisian chic. Commercial and editorial.", location: "Paris, France", heightCm: 176, bustCm: 82, waistCm: 62, hipsCm: 88, hair: "Auburn", eyes: "Hazel", shoe: "38 EU", agencyIdx: 2, score: 72, exp: ["L'Oréal Paris", "Dior Beauty"] },
+    { ...TEST_ACCOUNTS.models[6], bio: "Top model. Specializing in haute couture and runway.", location: "Moscow, Russia", heightCm: 182, bustCm: 80, waistCm: 59, hipsCm: 87, hair: "Blonde", eyes: "Blue", shoe: "41 EU", agencyIdx: 3, score: 98, exp: ["Chanel Couture", "Louis Vuitton", "Balenciaga"] },
+    { ...TEST_ACCOUNTS.models[7], bio: "French model. Runway and beauty.", location: "Lyon, France", heightCm: 179, bustCm: 81, waistCm: 60, hipsCm: 87, hair: "Brown", eyes: "Green", shoe: "39 EU", agencyIdx: 4, score: 75, exp: ["YSL", "Celine"] },
+    { ...TEST_ACCOUNTS.models[8], bio: "Nigerian-British model. London & Lagos.", location: "London, UK", heightCm: 181, bustCm: 82, waistCm: 60, hipsCm: 88, hair: "Black", eyes: "Brown", shoe: "40 EU", agencyIdx: 5, score: 91, exp: ["Burberry AW24", "Alexander McQueen"] },
+    { ...TEST_ACCOUNTS.models[9], bio: "Korean-American. Fashion and commercial.", location: "Seoul, South Korea", heightCm: 174, bustCm: 80, waistCm: 61, hipsCm: 86, hair: "Black", eyes: "Brown", shoe: "37 EU", agencyIdx: 6, score: 69, exp: ["Samsung", "Gentle Monster"] },
+  ]
+
+  const models: string[] = []
+  for (const m of modelData) {
+    const user = await prisma.user.create({
+      data: {
+        email: m.email,
         username: m.username,
         passwordHash: hash,
+        displayName: m.name,
         role: Role.MODEL,
+        profile: {
+          create: {
+            displayName: m.name,
+            bio: m.bio,
+            location: m.location,
+            height: `${m.heightCm} cm`,
+            hair: m.hair,
+            eyes: m.eyes,
+            experience: m.exp.join(", "),
+            verificationStatus: m.score > 70 ? "LUXLANE_VERIFIED" : m.score > 40 ? "AGENCY_VERIFIED" : "UNVERIFIED",
+            score: m.score,
+          },
+        },
+        modelProfile: {
+          create: {
+            heightCm: m.heightCm,
+            bustCm: m.bustCm,
+            waistCm: m.waistCm,
+            hipsCm: m.hipsCm,
+            shoeSize: m.shoe,
+            hair: m.hair,
+            eyes: m.eyes,
+            languages: ["English"],
+            agencyId: agencies[m.agencyIdx],
+            verificationLevel: m.score > 70 ? "LUXLANE_VERIFIED" : m.score > 40 ? "AGENCY_VERIFIED" : "UNVERIFIED",
+            luxlaneScore: m.score,
+          },
+        },
+        settings: { create: { darkMode: true } },
       },
     })
-    await prisma.profile.create({
+    models.push(user.id)
+    console.log(`  Model: ${m.name} (${m.email}) → Agency: ${agencyData[m.agencyIdx].name}`)
+  }
+
+  // ── CLIENTS (10) ──
+  const clientData = [
+    { ...TEST_ACCOUNTS.clients[0], bio: "Fashion Photographer. Vogue, Harper's Bazaar, Elle.", location: "Los Angeles, CA", industry: "Photography" },
+    { ...TEST_ACCOUNTS.clients[1], bio: "Legendary fashion photographer. 40+ years in the industry.", location: "New York, NY", industry: "Photography" },
+    { ...TEST_ACCOUNTS.clients[2], bio: "Creative Director. Brand campaigns and editorial production.", location: "London, UK", industry: "Creative Direction" },
+    { ...TEST_ACCOUNTS.clients[3], bio: "Fashion designer and creative visionary.", location: "New York, NY", industry: "Fashion Design" },
+    { ...TEST_ACCOUNTS.clients[4], bio: "Stylist and creative consultant. Editorial and commercial.", location: "London, UK", industry: "Styling" },
+    { ...TEST_ACCOUNTS.clients[5], bio: "Production manager. Fashion shows and photoshoots.", location: "Paris, France", industry: "Production" },
+    { ...TEST_ACCOUNTS.clients[6], bio: "Casting director. 15 years in fashion casting.", location: "New York, NY", industry: "Casting" },
+    { ...TEST_ACCOUNTS.clients[7], bio: "Film director and commercial producer.", location: "Seoul, South Korea", industry: "Film & Video" },
+    { ...TEST_ACCOUNTS.clients[8], bio: "Beauty and wellness brand founder.", location: "Miami, FL", industry: "Beauty" },
+    { ...TEST_ACCOUNTS.clients[9], bio: "Music video and concert tour production.", location: "London, UK", industry: "Entertainment" },
+  ]
+
+  const clients: string[] = []
+  for (const c of clientData) {
+    const user = await prisma.user.create({
       data: {
-        userId: user.id,
-        displayName: m.displayName,
-        bio: m.bio,
-        location: m.location,
-        height: m.height,
-        hair: m.hair,
-        eyes: m.eyes,
-        experience: m.experience,
-        score: m.score,
-        avatarUrl: m.avatar,
-        verificationStatus: m.score >= 88 ? "LUXLANE_VERIFIED" : m.score >= 82 ? "AGENCY_VERIFIED" : "UNVERIFIED",
+        email: c.email,
+        username: c.username,
+        passwordHash: hash,
+        displayName: c.name,
+        role: Role.CLIENT,
+        profile: { create: { displayName: c.name, bio: c.bio, location: c.location, verificationStatus: "AGENCY_VERIFIED" } },
+        clientProfile: { create: { clientName: c.name, industry: c.industry } },
+        settings: { create: { darkMode: true } },
       },
     })
-    await prisma.modelProfile.create({
+    clients.push(user.id)
+    console.log(`  Client: ${c.name} (${c.email})`)
+  }
+
+  // ── FOLLOW RELATIONSHIPS ──
+  console.log("Creating follow relationships...")
+  const followPairs: [string, string][] = [
+    // Brands follow each other
+    [brands[0], brands[1]], [brands[1], brands[0]], [brands[2], brands[0]],
+    // Agencies follow brands
+    [agencies[0], brands[0]], [agencies[0], brands[1]], [agencies[1], brands[0]],
+    [agencies[2], brands[1]], [agencies[3], brands[2]], [agencies[4], brands[3]],
+    // Models follow brands
+    [models[0], brands[0]], [models[0], brands[1]], [models[1], brands[0]],
+    [models[2], brands[1]], [models[3], brands[2]], [models[4], brands[0]],
+    [models[4], brands[1]], [models[5], brands[2]], [models[6], brands[0]],
+    // Models follow agencies
+    [models[0], agencies[0]], [models[1], agencies[1]], [models[2], agencies[2]],
+    [models[3], agencies[0]], [models[4], agencies[1]], [models[5], agencies[2]],
+    // Models follow each other
+    [models[0], models[1]], [models[1], models[0]], [models[2], models[0]],
+    [models[3], models[4]], [models[4], models[3]], [models[5], models[6]],
+    [models[6], models[7]], [models[7], models[8]], [models[8], models[9]],
+    // Brands follow models
+    [brands[0], models[0]], [brands[0], models[4]], [brands[0], models[6]],
+    [brands[1], models[0]], [brands[1], models[1]], [brands[1], models[4]],
+    [brands[2], models[6]], [brands[2], models[8]],
+    // Clients follow models and brands
+    [clients[0], models[0]], [clients[0], brands[0]], [clients[1], models[6]],
+  ]
+  for (const [a, b] of followPairs) {
+    await prisma.follow.create({ data: { followerId: a, followingId: b } }).catch(() => {})
+  }
+
+  // ── CASTINGS (8) ──
+  console.log("Creating castings...")
+  const now = new Date()
+  const futureDate = (days: number) => new Date(now.getTime() + days * 86400000)
+
+  const castingDefs = [
+    { createdBy: brands[0], title: "Dior Spring 2025 Campaign", type: "CAMPAIGN" as const, desc: "Seeking diverse female models for our upcoming Spring 2025 campaign. Shot by Steven Meisel in Paris.", location: "Paris, France", payMin: 15000, payMax: 15000, start: futureDate(30), end: futureDate(35), deadline: futureDate(20), minH: 175, maxH: 185, tags: ["runway", "editorial"] },
+    { createdBy: brands[1], title: "Gucci Milan Fashion Week", type: "RUNWAY" as const, desc: "Gucci runway show for Milan Fashion Week. Strong walk required.", location: "Milan, Italy", payMin: 5000, payMax: 5000, start: futureDate(40), end: futureDate(41), deadline: futureDate(30), minH: 175, maxH: 185, tags: ["runway"] },
+    { createdBy: brands[2], title: "Chanel Haute Couture Fitting", type: "EVENT" as const, desc: "Fitting session for Chanel Haute Couture collection. Paris atelier.", location: "Paris, France", payMin: 800, payMax: 800, start: futureDate(15), end: futureDate(16), deadline: futureDate(10), minH: 172, maxH: 182, tags: ["couture", "fitting"] },
+    { createdBy: brands[3], title: "Prada Resort Lookbook", type: "EDITORIAL" as const, desc: "Prada Resort collection lookbook shoot in Sardinia.", location: "Sardinia, Italy", payMin: 8000, payMax: 8000, start: futureDate(45), end: futureDate(48), deadline: futureDate(35), minH: 174, maxH: 184, tags: ["editorial", "campaign"] },
+    { createdBy: agencies[0], title: "Elite New Faces 2025", type: "EVENT" as const, desc: "Annual scouting event. Open to all aspiring models.", location: "New York, NY", payMin: 0, payMax: 0, start: futureDate(60), end: futureDate(61), deadline: futureDate(50), minH: 165, maxH: 190, tags: ["scouting", "open-call"] },
+    { createdBy: agencies[1], title: "Next x Zara Campaign", type: "CAMPAIGN" as const, desc: "Next Models casting for Zara global campaign in Barcelona.", location: "Barcelona, Spain", payMin: 8000, payMax: 8000, start: futureDate(25), end: futureDate(29), deadline: futureDate(18), minH: 170, maxH: 185, tags: ["commercial", "campaign"] },
+    { createdBy: agencies[2], title: "IMG Worldwide Scouting", type: "EVENT" as const, desc: "IMG Models worldwide talent scouting. Virtual submissions accepted.", location: "Worldwide (Virtual)", payMin: 0, payMax: 0, start: futureDate(30), end: futureDate(60), deadline: futureDate(55), minH: 160, maxH: 195, tags: ["scouting"] },
+    { createdBy: brands[4], title: "Burberry Autumn Campaign", type: "CAMPAIGN" as const, desc: "Burberry looking for fresh faces for autumn campaign. London shoot.", location: "London, UK", payMin: 10000, payMax: 10000, start: futureDate(50), end: futureDate(53), deadline: futureDate(40), minH: 175, maxH: 185, tags: ["campaign", "editorial"] },
+  ]
+
+  const castings: string[] = []
+  for (const c of castingDefs) {
+    const casting = await prisma.casting.create({
       data: {
-        userId: user.id,
-        heightCm: parseInt(m.height, 10),
-        bustCm: 84 + (m.username.length % 5),
-        waistCm: 62 + (m.username.length % 4),
-        hipsCm: 88 + (m.username.length % 6),
-        shoeSize: "EU 38",
-        hair: m.hair,
-        eyes: m.eyes,
-        languages: ["English", m.username === "chiara" || m.username === "lea" ? "French" : "Italian"].filter(Boolean).slice(0, 2),
-        availability: "AVAILABLE",
-        luxlaneScore: m.score,
-        details: {
-          dressSize: "S",
-          skinTone: "light",
-          experience: m.experience.split(", "),
+        createdBy: c.createdBy,
+        title: c.title,
+        type: c.type,
+        description: c.desc,
+        location: c.location,
+        payMin: c.payMin,
+        payMax: c.payMax,
+        startDate: c.start,
+        endDate: c.end,
+        deadline: c.deadline,
+        status: "ACTIVE",
+        verifiedOnly: c.payMin > 5000,
+        requirements: {
+          create: { minHeightCm: c.minH, maxHeightCm: c.maxH, tags: c.tags },
         },
       },
     })
-    await prisma.userSettings.create({
-      data: { userId: user.id },
-    })
-    createdModels.push({ id: user.id, username: m.username })
+    castings.push(casting.id)
+    console.log(`  Casting: ${c.title}`)
   }
 
-  const byUsername = Object.fromEntries(createdModels.map((m) => [m.username, m]))
-  const sofia = byUsername.sofia!
-  const lina = byUsername.lina!
-  const maya = byUsername.maya!
-  const emma = byUsername.emma!
-  const chiara = byUsername.chiara!
-  const zoe = byUsername.zoe!
-  const anna = byUsername.anna!
-  const lea = byUsername.lea!
-  const nina = byUsername.nina!
-  const jade = byUsername.jade!
-  const luna = byUsername.luna!
-  const sasha = byUsername.sasha!
-  const isla = byUsername.isla!
-  const freya = byUsername.freya!
-  const olivia = byUsername.olivia!
-  const mia = byUsername.mia!
-  const elena = byUsername.elena!
-  const camila = byUsername.camila!
-  const valentina = byUsername.valentina!
-  const beatrice = byUsername.beatrice!
-  const giulia = byUsername.giulia!
-  const amelia = byUsername.amelia!
-  const violet = byUsername.violet!
-  const iris = byUsername.iris!
-  const noor = byUsername.noor!
-  const yuki = byUsername.yuki!
-  const alexa = byUsername.alexa!
-  const gemma = byUsername.gemma!
-  const helen = byUsername.helen!
-  const diana = byUsername.diana!
-
-  // Assign models to agencies (roster) – spread across Elite, Next, IMG
-  await prisma.modelProfile.updateMany({
-    where: { userId: { in: [sofia.id, lina.id, maya.id, emma.id, chiara.id, zoe.id, isla.id, freya.id, olivia.id, alexa.id] } },
-    data: { agencyId: agencyUser.id },
-  })
-  await prisma.modelProfile.updateMany({
-    where: { userId: { in: [lea.id, anna.id, nina.id, mia.id, elena.id, camila.id, beatrice.id, amelia.id] } },
-    data: { agencyId: nextAgencyUser.id },
-  })
-  await prisma.modelProfile.updateMany({
-    where: { userId: { in: [jade.id, luna.id, sasha.id, valentina.id, giulia.id, violet.id, iris.id, noor.id, yuki.id, gemma.id, helen.id, diana.id] } },
-    data: { agencyId: imgAgencyUser.id },
-  })
-
-  // Follows: brands, agencies, models – so profile follower counts and discovery feel real
-  await prisma.follow.createMany({
-    data: [
-      { followerId: brandUser.id, followingId: sofia.id },
-      { followerId: brandUser.id, followingId: lina.id },
-      { followerId: brandUser.id, followingId: chiara.id },
-      { followerId: brandUser.id, followingId: valentina.id },
-      { followerId: gucciUser.id, followingId: sofia.id },
-      { followerId: gucciUser.id, followingId: lea.id },
-      { followerId: gucciUser.id, followingId: lina.id },
-      { followerId: gucciUser.id, followingId: alexa.id },
-      { followerId: chanelUser.id, followingId: sasha.id },
-      { followerId: chanelUser.id, followingId: jade.id },
-      { followerId: chanelUser.id, followingId: iris.id },
-      { followerId: agencyUser.id, followingId: sofia.id },
-      { followerId: agencyUser.id, followingId: lina.id },
-      { followerId: agencyUser.id, followingId: maya.id },
-      { followerId: agencyUser.id, followingId: emma.id },
-      { followerId: agencyUser.id, followingId: chiara.id },
-      { followerId: agencyUser.id, followingId: zoe.id },
-      { followerId: agencyUser.id, followingId: isla.id },
-      { followerId: nextAgencyUser.id, followingId: lea.id },
-      { followerId: nextAgencyUser.id, followingId: anna.id },
-      { followerId: nextAgencyUser.id, followingId: maya.id },
-      { followerId: nextAgencyUser.id, followingId: mia.id },
-      { followerId: imgAgencyUser.id, followingId: jade.id },
-      { followerId: imgAgencyUser.id, followingId: luna.id },
-      { followerId: imgAgencyUser.id, followingId: sasha.id },
-      { followerId: imgAgencyUser.id, followingId: valentina.id },
-      { followerId: lina.id, followingId: sofia.id },
-      { followerId: maya.id, followingId: sofia.id },
-      { followerId: emma.id, followingId: lina.id },
-      { followerId: zoe.id, followingId: chiara.id },
-      { followerId: anna.id, followingId: sofia.id },
-      { followerId: lea.id, followingId: lina.id },
-      { followerId: nina.id, followingId: emma.id },
-      { followerId: jade.id, followingId: sofia.id },
-      { followerId: jade.id, followingId: lina.id },
-      { followerId: luna.id, followingId: emma.id },
-      { followerId: sasha.id, followingId: chiara.id },
-      { followerId: sasha.id, followingId: anna.id },
-      { followerId: isla.id, followingId: sofia.id },
-      { followerId: valentina.id, followingId: chiara.id },
-      { followerId: alexa.id, followingId: lea.id },
-    ],
-    skipDuplicates: true,
-  })
-
-  // Portfolio media – multiple images per model so profiles look full
-  const portfolioEntries: { ownerId: string; type: "PORTFOLIO"; url: string }[] = [
-    { ownerId: sofia.id, type: "PORTFOLIO", url: "/high-fashion-editorial-model.jpg" },
-    { ownerId: sofia.id, type: "PORTFOLIO", url: "/runway-fashion-week-model.jpg" },
-    { ownerId: sofia.id, type: "PORTFOLIO", url: "/elegant-fashion-model-portrait-sofia.jpg" },
-    { ownerId: sofia.id, type: "PORTFOLIO", url: "/dior-haute-couture-dress-detail.jpg" },
-    { ownerId: lina.id, type: "PORTFOLIO", url: "/professional-model-headshot-woman-brunette.jpg" },
-    { ownerId: lina.id, type: "PORTFOLIO", url: "/editorial-fashion-photography-black-and-white.jpg" },
-    { ownerId: lina.id, type: "PORTFOLIO", url: "/runway-fashion-week-model.jpg" },
-    { ownerId: chiara.id, type: "PORTFOLIO", url: "/elegant-fashion-model-portrait-sofia.jpg" },
-    { ownerId: chiara.id, type: "PORTFOLIO", url: "/paris-fashion-week-runway-model-walking-couture.jpg" },
-    { ownerId: lea.id, type: "PORTFOLIO", url: "/paris-fashion-week-runway-model-walking-couture.jpg" },
-    { ownerId: lea.id, type: "PORTFOLIO", url: "/italian-supermodel-portrait-elegant.jpg" },
-    { ownerId: jade.id, type: "PORTFOLIO", url: "/luxury-brand-campaign-model.jpg" },
-    { ownerId: jade.id, type: "PORTFOLIO", url: "/luxury-brand-campaign-photo.jpg" },
-    { ownerId: luna.id, type: "PORTFOLIO", url: "/model-casting-event.jpg" },
-    { ownerId: sasha.id, type: "PORTFOLIO", url: "/high-fashion-editorial-photo.jpg" },
-    { ownerId: sasha.id, type: "PORTFOLIO", url: "/vogue-editorial-renaissance.jpg" },
-    { ownerId: maya.id, type: "PORTFOLIO", url: "/high-fashion-editorial-model.jpg" },
-    { ownerId: emma.id, type: "PORTFOLIO", url: "/young-model-headshot-woman-blonde-natural.jpg" },
-    { ownerId: anna.id, type: "PORTFOLIO", url: "/vogue-editorial-renaissance.jpg" },
-    { ownerId: nina.id, type: "PORTFOLIO", url: "/professional-model-headshot-woman-brunette.jpg" },
-    { ownerId: zoe.id, type: "PORTFOLIO", url: "/model-headshot-blonde-european.jpg" },
-    { ownerId: isla.id, type: "PORTFOLIO", url: "/runway-fashion-week-model.jpg" },
-    { ownerId: freya.id, type: "PORTFOLIO", url: "/vogue-editorial-renaissance.jpg" },
-    { ownerId: olivia.id, type: "PORTFOLIO", url: "/young-aspiring-model-portrait-natural.jpg" },
-    { ownerId: mia.id, type: "PORTFOLIO", url: "/luxury-brand-campaign-photo.jpg" },
-    { ownerId: elena.id, type: "PORTFOLIO", url: "/high-fashion-editorial-model.jpg" },
-    { ownerId: camila.id, type: "PORTFOLIO", url: "/elegant-fashion-model-portrait-sofia.jpg" },
-    { ownerId: valentina.id, type: "PORTFOLIO", url: "/paris-fashion-week-runway-model-walking-couture.jpg" },
-    { ownerId: beatrice.id, type: "PORTFOLIO", url: "/professional-model-headshot-woman-italian-dark-hai.jpg" },
-    { ownerId: giulia.id, type: "PORTFOLIO", url: "/italian-supermodel-portrait-elegant.jpg" },
-    { ownerId: amelia.id, type: "PORTFOLIO", url: "/model-headshot-blonde-european.jpg" },
-    { ownerId: violet.id, type: "PORTFOLIO", url: "/luxury-brand-campaign-model.jpg" },
-    { ownerId: iris.id, type: "PORTFOLIO", url: "/editorial-fashion-photography-black-and-white.jpg" },
-    { ownerId: noor.id, type: "PORTFOLIO", url: "/high-fashion-editorial-photo.jpg" },
-    { ownerId: yuki.id, type: "PORTFOLIO", url: "/young-model-headshot-woman-blonde-natural.jpg" },
-    { ownerId: alexa.id, type: "PORTFOLIO", url: "/runway-fashion-week-photo.jpg" },
-    { ownerId: gemma.id, type: "PORTFOLIO", url: "/model-casting-event.jpg" },
-    { ownerId: helen.id, type: "PORTFOLIO", url: "/professional-model-headshot-woman-brunette.jpg" },
-    { ownerId: diana.id, type: "PORTFOLIO", url: "/dior-spring-2024-collection-campaign-elegant.jpg" },
+  // ── SUBMISSIONS ──
+  console.log("Creating submissions...")
+  const submissionDefs: { castingIdx: number; modelIdx: number; status: string }[] = [
+    { castingIdx: 0, modelIdx: 0, status: "SHORTLISTED" },
+    { castingIdx: 0, modelIdx: 1, status: "APPLIED" },
+    { castingIdx: 0, modelIdx: 4, status: "APPLIED" },
+    { castingIdx: 0, modelIdx: 6, status: "SHORTLISTED" },
+    { castingIdx: 1, modelIdx: 0, status: "APPLIED" },
+    { castingIdx: 1, modelIdx: 4, status: "SHORTLISTED" },
+    { castingIdx: 1, modelIdx: 6, status: "APPLIED" },
+    { castingIdx: 2, modelIdx: 3, status: "ACCEPTED" },
+    { castingIdx: 2, modelIdx: 5, status: "APPLIED" },
+    { castingIdx: 3, modelIdx: 0, status: "APPLIED" },
+    { castingIdx: 3, modelIdx: 1, status: "APPLIED" },
+    { castingIdx: 3, modelIdx: 8, status: "SHORTLISTED" },
+    { castingIdx: 4, modelIdx: 2, status: "APPLIED" },
+    { castingIdx: 5, modelIdx: 4, status: "APPLIED" },
+    { castingIdx: 5, modelIdx: 3, status: "SHORTLISTED" },
+    { castingIdx: 6, modelIdx: 2, status: "APPLIED" },
+    { castingIdx: 6, modelIdx: 9, status: "APPLIED" },
+    { castingIdx: 7, modelIdx: 8, status: "APPLIED" },
+    { castingIdx: 7, modelIdx: 1, status: "SHORTLISTED" },
   ]
-  await prisma.mediaAsset.createMany({ data: portfolioEntries })
 
-  // Castings (active)
-  const casting1 = await prisma.casting.create({
-    data: {
-      createdBy: brandUser.id,
-      title: "Dior Spring 2025 Campaign",
-      type: "CAMPAIGN",
-      description: "Seeking models for the upcoming spring campaign. Editorial experience preferred.",
-      location: "Paris, France",
-      payMin: 5000,
-      payMax: 15000,
-      status: "ACTIVE",
-      verifiedOnly: true,
-      deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    },
-  })
-  await prisma.castingRequirement.create({
-    data: {
-      castingId: casting1.id,
-      minHeightCm: 172,
-      maxHeightCm: 182,
-      tags: ["editorial", "campaign"],
-      notes: "Natural beauty, versatile look",
-    },
-  })
-
-  const casting2 = await prisma.casting.create({
-    data: {
-      createdBy: gucciUser.id,
-      title: "Gucci Runway FW25",
-      type: "RUNWAY",
-      description: "Milan Fashion Week – Gucci show. Strong runway walk required.",
-      location: "Milan, Italy",
-      payMin: 3000,
-      payMax: 8000,
-      status: "ACTIVE",
-      verifiedOnly: false,
-      deadline: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000),
-    },
-  })
-  await prisma.castingRequirement.create({
-    data: {
-      castingId: casting2.id,
-      minHeightCm: 175,
-      maxHeightCm: 185,
-      tags: ["runway", "fashion week"],
-    },
-  })
-
-  const casting3 = await prisma.casting.create({
-    data: {
-      createdBy: brandUser.id,
-      title: "Dior Haute Couture Fitting",
-      type: "EVENT",
-      description: "Fitting for haute couture presentation.",
-      location: "Paris",
-      payMin: 1500,
-      payMax: 3000,
-      status: "ACTIVE",
-      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    },
-  })
-
-  const casting4 = await prisma.casting.create({
-    data: {
-      createdBy: chanelUser.id,
-      title: "Chanel N°5 Beauty Campaign",
-      type: "CAMPAIGN",
-      description: "Beauty and fragrance campaign. Strong beauty look required.",
-      location: "Paris, France",
-      payMin: 8000,
-      payMax: 20000,
-      status: "ACTIVE",
-      verifiedOnly: true,
-      deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    },
-  })
-  await prisma.castingRequirement.create({
-    data: {
-      castingId: casting4.id,
-      minHeightCm: 172,
-      maxHeightCm: 182,
-      tags: ["beauty", "campaign", "fragrance"],
-      notes: "Clean skin, versatile beauty",
-    },
-  })
-
-  // Submissions (models applied; some agency-proposed via submittedBy = agency id later in flow)
-  await prisma.submission.createMany({
-    data: [
-      { castingId: casting1.id, modelId: sofia.id, submittedBy: sofia.id, status: "SHORTLISTED", note: "Very interested!" },
-      { castingId: casting1.id, modelId: lina.id, submittedBy: lina.id, status: "APPLIED" },
-      { castingId: casting1.id, modelId: chiara.id, submittedBy: chiara.id, status: "APPLIED" },
-      { castingId: casting1.id, modelId: jade.id, submittedBy: jade.id, status: "APPLIED" },
-      { castingId: casting1.id, modelId: elena.id, submittedBy: elena.id, status: "APPLIED" },
-      { castingId: casting1.id, modelId: valentina.id, submittedBy: valentina.id, status: "APPLIED" },
-      { castingId: casting2.id, modelId: lea.id, submittedBy: lea.id, status: "APPLIED" },
-      { castingId: casting2.id, modelId: sofia.id, submittedBy: sofia.id, status: "APPLIED" },
-      { castingId: casting2.id, modelId: luna.id, submittedBy: luna.id, status: "APPLIED" },
-      { castingId: casting2.id, modelId: alexa.id, submittedBy: alexa.id, status: "APPLIED" },
-      { castingId: casting2.id, modelId: mia.id, submittedBy: mia.id, status: "APPLIED" },
-      { castingId: casting3.id, modelId: emma.id, submittedBy: emma.id, status: "APPLIED" },
-      { castingId: casting3.id, modelId: beatrice.id, submittedBy: beatrice.id, status: "APPLIED" },
-      { castingId: casting4.id, modelId: sasha.id, submittedBy: sasha.id, status: "SHORTLISTED", note: "Beauty specialist" },
-      { castingId: casting4.id, modelId: anna.id, submittedBy: anna.id, status: "APPLIED" },
-      { castingId: casting4.id, modelId: jade.id, submittedBy: jade.id, status: "APPLIED" },
-      { castingId: casting4.id, modelId: iris.id, submittedBy: iris.id, status: "APPLIED" },
-      { castingId: casting4.id, modelId: freya.id, submittedBy: freya.id, status: "APPLIED" },
-    ],
-    skipDuplicates: true,
-  })
-
-  // Saved castings
-  await prisma.savedCasting.createMany({
-    data: [
-      { userId: lina.id, castingId: casting1.id },
-      { userId: maya.id, castingId: casting1.id },
-      { userId: anna.id, castingId: casting2.id },
-      { userId: jade.id, castingId: casting4.id },
-      { userId: luna.id, castingId: casting2.id },
-      { userId: sasha.id, castingId: casting4.id },
-    ],
-    skipDuplicates: true,
-  })
-
-  // Feed posts – models and brands so profiles and feed are full
-  const posts = await prisma.post.createManyAndReturn({
-    data: [
-      { userId: sofia.id, imageUrl: "/high-fashion-editorial-model.jpg", caption: "Behind the scenes from yesterday's shoot. Thank you to the incredible team." },
-      { userId: brandUser.id, imageUrl: "/dior-fashion-campaign-spring-aesthetic.jpg", caption: "Spring 2025. A new chapter begins. #DiorSS25" },
-      { userId: lina.id, imageUrl: "/runway-fashion-week-model.jpg", caption: "Milan Fashion Week finale walk. Dreams do come true." },
-      { userId: gucciUser.id, imageUrl: "/gucci-fashion-show-runway-aesthetic.jpg", caption: "FW25. See you on the runway. #GucciFW25" },
-      { userId: chiara.id, imageUrl: "/dior-haute-couture-dress-detail.jpg", caption: "Couture details. Grateful for this journey." },
-      { userId: lea.id, imageUrl: "/paris-fashion-week-runway-model-walking-couture.jpg", caption: "Paris. Always magic." },
-      { userId: anna.id, imageUrl: "/vogue-editorial-renaissance.jpg", caption: "Editorial out now. Thank you @vogue." },
-      { userId: emma.id, imageUrl: "/young-model-headshot-woman-blonde-natural.jpg", caption: "New face life. Learning every day." },
-      { userId: jade.id, imageUrl: "/luxury-brand-campaign-model.jpg", caption: "Campaign drop. So grateful for this team." },
-      { userId: chanelUser.id, imageUrl: "/dior-luxury-accessories-jewelry.jpg", caption: "Timeless elegance. N°5." },
-      { userId: sasha.id, imageUrl: "/high-fashion-editorial-photo.jpg", caption: "Beauty shoot wrap. Thank you everyone." },
-      { userId: luna.id, imageUrl: "/model-casting-event.jpg", caption: "Casting day vibes. Fingers crossed." },
-      { userId: maya.id, imageUrl: "/high-fashion-editorial-model.jpg", caption: "London calling. New project coming soon." },
-      { userId: isla.id, imageUrl: "/runway-fashion-week-model.jpg", caption: "Runway season. So grateful." },
-      { userId: freya.id, imageUrl: "/vogue-editorial-renaissance.jpg", caption: "Editorial out. Thank you team." },
-      { userId: mia.id, imageUrl: "/luxury-brand-campaign-photo.jpg", caption: "Barcelona shoot. Best crew." },
-      { userId: elena.id, imageUrl: "/high-fashion-editorial-model.jpg", caption: "Athens to the world." },
-      { userId: valentina.id, imageUrl: "/paris-fashion-week-runway-model-walking-couture.jpg", caption: "Couture week. Dream come true." },
-      { userId: iris.id, imageUrl: "/editorial-fashion-photography-black-and-white.jpg", caption: "B&W editorial. Love this one." },
-      { userId: alexa.id, imageUrl: "/runway-fashion-week-photo.jpg", caption: "NYFW. What a week." },
-      { userId: helen.id, imageUrl: "/professional-model-headshot-woman-brunette.jpg", caption: "New headshots. Vienna." },
-      { userId: diana.id, imageUrl: "/dior-spring-2024-collection-campaign-elegant.jpg", caption: "Campaign season. Blessed." },
-    ],
-  })
-
-  // Post likes (so feed has engagement)
-  const postIds = posts.map((p) => p.id)
-  if (postIds.length >= 4) {
-    await prisma.postLike.createMany({
-      data: [
-        { userId: lina.id, postId: postIds[0] },
-        { userId: maya.id, postId: postIds[0] },
-        { userId: chiara.id, postId: postIds[0] },
-        { userId: sofia.id, postId: postIds[1] },
-        { userId: emma.id, postId: postIds[1] },
-        { userId: brandUser.id, postId: postIds[2] },
-        { userId: sofia.id, postId: postIds[2] },
-        { userId: gucciUser.id, postId: postIds[3] },
-        { userId: lea.id, postId: postIds[3] },
-        { userId: sasha.id, postId: postIds[8] },
-        { userId: luna.id, postId: postIds[8] },
-        { userId: anna.id, postId: postIds[9] },
-        { userId: jade.id, postId: postIds[10] },
-        { userId: chiara.id, postId: postIds[10] },
-        { userId: emma.id, postId: postIds[11] },
-        { userId: nina.id, postId: postIds[11] },
-      ],
-      skipDuplicates: true,
+  for (const s of submissionDefs) {
+    await prisma.submission.create({
+      data: {
+        castingId: castings[s.castingIdx],
+        modelId: models[s.modelIdx],
+        submittedBy: models[s.modelIdx],
+        status: s.status as any,
+        note: s.status === "APPLIED" ? "I'm very interested in this opportunity!" : undefined,
+      },
     })
   }
 
-  // Comments on posts
-  if (postIds.length >= 2) {
-    await prisma.comment.createMany({
-      data: [
-        { postId: postIds[0], userId: lina.id, body: "So good! 🔥" },
-        { postId: postIds[0], userId: chiara.id, body: "Stunning as always" },
-        { postId: postIds[1], userId: sofia.id, body: "Can't wait for this campaign" },
-        { postId: postIds[2], userId: brandUser.id, body: "Amazing work" },
-        { postId: postIds[8], userId: sasha.id, body: "Love this!" },
-        { postId: postIds[8], userId: luna.id, body: "So good Jade" },
-        { postId: postIds[10], userId: anna.id, body: "Beauty goals" },
-        { postId: postIds[11], userId: jade.id, body: "Good luck!" },
-      ],
-      skipDuplicates: false,
-    })
-  }
-
-  // Direct conversations with messages
+  // ── CONVERSATIONS & MESSAGES ──
+  console.log("Creating conversations...")
+  // Dior ↔ Sofia
   const conv1 = await prisma.conversation.create({
     data: {
       type: "direct",
-      members: {
-        create: [
-          { userId: brandUser.id },
-          { userId: sofia.id },
-        ],
-      },
+      members: { create: [{ userId: brands[0] }, { userId: models[0] }] },
     },
   })
-  await prisma.message.createMany({
-    data: [
-      { conversationId: conv1.id, senderId: brandUser.id, body: "Hi Sofia, we'd love to have you for the Spring campaign. Are you available next week?" },
-      { conversationId: conv1.id, senderId: sofia.id, body: "Hi! Yes, I'm very interested. I have availability from Monday." },
-      { conversationId: conv1.id, senderId: brandUser.id, body: "Perfect. We'll send the brief and call sheet by Friday." },
-    ],
-  })
+  await prisma.message.create({ data: { conversationId: conv1.id, senderId: brands[0], body: "Hi Sofia, we loved your portfolio. Would you be available for a fitting next week?" } })
+  await prisma.message.create({ data: { conversationId: conv1.id, senderId: models[0], body: "Thank you! Yes, I'm available. What day works best?" } })
+  await prisma.message.create({ data: { conversationId: conv1.id, senderId: brands[0], body: "Tuesday at 10am at our Paris atelier. I'll send the address." } })
 
+  // Elite ↔ Sofia
   const conv2 = await prisma.conversation.create({
     data: {
       type: "direct",
-      members: {
-        create: [
-          { userId: lina.id },
-          { userId: agencyUser.id },
-        ],
-      },
+      members: { create: [{ userId: agencies[0] }, { userId: models[0] }] },
     },
   })
-  await prisma.message.createMany({
-    data: [
-      { conversationId: conv2.id, senderId: agencyUser.id, body: "Lina, casting callback for the Dior campaign – tomorrow 3pm?" },
-      { conversationId: conv2.id, senderId: lina.id, body: "Yes, I'll be there. Thank you!" },
-    ],
-  })
+  await prisma.message.create({ data: { conversationId: conv2.id, senderId: agencies[0], body: "Sofia, we have a great opportunity with Dior. Are you interested?" } })
+  await prisma.message.create({ data: { conversationId: conv2.id, senderId: models[0], body: "Absolutely! I'd love to hear more details." } })
 
+  // Gucci ↔ Chiara
   const conv3 = await prisma.conversation.create({
     data: {
       type: "direct",
-      members: {
-        create: [
-          { userId: sofia.id },
-          { userId: lina.id },
-        ],
-      },
+      members: { create: [{ userId: brands[1] }, { userId: models[4] }] },
     },
   })
-  await prisma.message.createMany({
-    data: [
-      { conversationId: conv3.id, senderId: sofia.id, body: "Hey! Are you going to the Gucci casting?" },
-      { conversationId: conv3.id, senderId: lina.id, body: "Yes! See you there 💪" },
-    ],
-  })
+  await prisma.message.create({ data: { conversationId: conv3.id, senderId: brands[1], body: "Ciao Chiara! We'd love to have you for Milan Fashion Week." } })
 
-  const conv4 = await prisma.conversation.create({
+  // ── POSTS ──
+  console.log("Creating posts...")
+  await prisma.post.create({
     data: {
-      type: "direct",
-      members: {
-        create: [
-          { userId: chanelUser.id },
-          { userId: sasha.id },
-        ],
-      },
+      userId: models[0],
+      imageUrl: "/placeholder.svg?height=600&width=400&text=Behind+the+scenes",
+      caption: "Behind the scenes from yesterday's Dior shoot. Thank you to the incredible team.",
     },
   })
-  await prisma.message.createMany({
-    data: [
-      { conversationId: conv4.id, senderId: chanelUser.id, body: "Sasha, we'd like to schedule a callback for the N°5 campaign. Are you free next week?" },
-      { conversationId: conv4.id, senderId: sasha.id, body: "Yes! I have Tuesday and Thursday open. Thank you so much." },
-    ],
-  })
-
-  const conv5 = await prisma.conversation.create({
+  await prisma.post.create({
     data: {
-      type: "direct",
-      members: {
-        create: [
-          { userId: imgAgencyUser.id },
-          { userId: jade.id },
-        ],
-      },
+      userId: brands[0],
+      imageUrl: "/placeholder.svg?height=600&width=400&text=Dior+SS25",
+      caption: "Introducing our Spring 2025 collection. Now casting.",
     },
   })
-  await prisma.message.createMany({
-    data: [
-      { conversationId: conv5.id, senderId: imgAgencyUser.id, body: "Jade, we have a Dior casting we'd like to put you forward for. Can you send your latest book?" },
-      { conversationId: conv5.id, senderId: jade.id, body: "Of course! Sending it over today." },
-    ],
+  await prisma.post.create({
+    data: {
+      userId: models[4],
+      imageUrl: "/placeholder.svg?height=600&width=400&text=MFW+Runway",
+      caption: "Milan Fashion Week was a dream. Grateful for every moment on the runway.",
+    },
+  })
+  await prisma.post.create({
+    data: {
+      userId: agencies[0],
+      imageUrl: "/placeholder.svg?height=600&width=400&text=Elite+New+Faces",
+      caption: "Applications for Elite New Faces 2025 are now open! Link in bio.",
+    },
+  })
+  await prisma.post.create({
+    data: {
+      userId: models[6],
+      imageUrl: "/placeholder.svg?height=600&width=400&text=Couture+Week",
+      caption: "Paris Couture Week. Chanel and Valentino shows done!",
+    },
   })
 
-  console.log("Seed complete: 3 brands, 3 agencies, 30 models, castings, follows, posts, conversations, submissions, portfolio media.")
+  // ── NOTIFICATIONS ──
+  console.log("Creating notifications...")
+  await prisma.notification.create({
+    data: { userId: models[0], type: "SHORTLISTED", payload: { castingTitle: "Dior Spring 2025 Campaign", castingId: castings[0] } },
+  })
+  await prisma.notification.create({
+    data: { userId: models[6], type: "SHORTLISTED", payload: { castingTitle: "Dior Spring 2025 Campaign", castingId: castings[0] } },
+  })
+  await prisma.notification.create({
+    data: { userId: models[3], type: "CONFIRMED", payload: { castingTitle: "Chanel Haute Couture Fitting", castingId: castings[2] } },
+  })
+
+  console.log("\n✅ Seed complete!")
+  console.log(`   ${brands.length} brands, ${agencies.length} agencies, ${models.length} models, ${clients.length} clients`)
+  console.log(`   ${castings.length} castings, ${submissionDefs.length} submissions`)
+  console.log(`   3 conversations with messages, 5 posts, 3 notifications`)
+  console.log(`\n   Login: any email above + password "${TEST_PASSWORD}"`)
+  console.log(`   Example: sofia@luxlane.demo / ${TEST_PASSWORD}`)
 }
 
 main()
   .catch((e) => {
-    console.error(e)
+    console.error("Seed failed:", e)
     process.exit(1)
   })
   .finally(async () => {
-    if (prisma) await prisma.$disconnect()
+    await prisma?.$disconnect()
   })

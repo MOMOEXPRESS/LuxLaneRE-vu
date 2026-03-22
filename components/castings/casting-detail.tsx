@@ -150,14 +150,24 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
   const hasDigitalTwin = user?.digitalTwin?.status === "complete"
   const meetsDigitalTwinReq = !requiresDigitalTwin || hasDigitalTwin
 
+  const [applyError, setApplyError] = useState<string | null>(null)
+
   const handleApply = async () => {
     if (!user) return
     setApplyLoading(true)
+    setApplyError(null)
     const res = await api.applyToCasting(casting.id, { note: applicationMessage })
     setApplyLoading(false)
     if (res.error) {
+      if (res.error.includes("Already applied")) {
+        setSubmissionStatus("applied")
+        setShowApplySheet(false)
+      } else {
+        setApplyError(res.error)
+      }
       return
     }
+    setShowApplySheet(false)
     setSubmissionStatus("applied")
     const applyData = res.data as { submission?: { id: string } } | undefined
     addApplication({
@@ -999,6 +1009,10 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                       {applicationMessage.trim() && <p>💬 Cover note included</p>}
                     </div>
                   </Card>
+
+                  {applyError && (
+                    <p className="text-sm text-red-500 text-center">{applyError}</p>
+                  )}
 
                   <div className="flex gap-2">
                     <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setApplyStep(3)}>

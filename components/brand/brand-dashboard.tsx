@@ -1292,6 +1292,12 @@ function CreateCastingSheet({
       deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
     })
 
+    if (res.error) {
+      setSubmitting(false)
+      alert(`Failed to create casting: ${res.error}`)
+      return
+    }
+
     const createData = res.data as { casting?: { id: string } } | undefined
     if (createData?.casting) {
       await api.activateCasting(createData.casting.id)
@@ -1304,6 +1310,7 @@ function CreateCastingSheet({
     setDescription("")
     setLocation("")
     setPay("")
+    onClose()
     onCreated()
   }
 
