@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -9,9 +9,9 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
 import { useConversations, useMessages } from "@/lib/hooks/use-conversations"
+import { useNotifications } from "@/lib/hooks/use-notifications"
 import { api } from "@/lib/api-client"
 import type { User as UserType } from "@/lib/types"
-import { useStore } from "@/lib/store-context"
 import type { Conversation, Message, JobOffer, Notification, CastingApplication } from "@/lib/types"
 import {
   ArrowLeft,
@@ -34,6 +34,7 @@ type InboxTab = "messages" | "bookings" | "notifications"
 
 interface InboxViewProps {
   onViewProfile?: (user: import("@/lib/types").User) => void
+  initialConversationId?: string | null
 }
 
 function mapApiConversationToConversation(apiConv: {
@@ -87,33 +88,40 @@ function mapApiConversationToConversation(apiConv: {
   }
 }
 
-export function InboxView({ onViewProfile }: InboxViewProps = {}) {
+export function InboxView({ onViewProfile, initialConversationId }: InboxViewProps = {}) {
   const { user } = useAuth()
   const { conversations: apiConversations, isLoading: conversationsLoading, refresh: refreshConversations } = useConversations()
-  const {
-    getNotificationsForUser,
-    getUnreadNotificationsCount,
-    markNotificationRead,
-    markAllNotificationsRead,
-    getOffersForModel,
-    getPendingOffersForModel,
-    updateOffer,
-    updateApplication,
-    getApplicationsForModel,
-  } = useStore()
+  const { notifications: apiNotifications, unreadCount, refresh: refreshNotifications } = useNotifications()
   const [activeTab, setActiveTab] = useState<InboxTab>("messages")
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
 
   const conversations = (apiConversations ?? []).map(mapApiConversationToConversation)
 
-  const notifications = user ? getNotificationsForUser(user.id) : []
-  const unreadCount = user ? getUnreadNotificationsCount(user.id) : 0
-  const offers = user ? getOffersForModel(user.id) : []
-  const pendingOffers = user ? getPendingOffersForModel(user.id) : []
-  const modelApplications = user ? getApplicationsForModel(user.id) : []
-  const bookingApplications = modelApplications.filter(
-    (a) => a.status === "accepted" || a.status === "shortlisted"
-  )
+  // Map API notifications to frontend Notification type
+  const notifications: Notification[] = (apiNotifications ?? []).map((n: any) => ({
+    id: n.id,
+    userId: n.userId || user?.id || "",
+    type: n.type?.toLowerCase() || "system",
+    title: n.payload?.title || n.title || "Notification",
+    message: n.payload?.message || n.payload?.body || n.message || "",
+    read: n.read ?? false,
+    actionUrl: n.payload?.castingId ? `/castings/${n.payload.castingId}` : undefined,
+    metadata: n.payload || {},
+    createdAt: new Date(n.createdAt),
+  }))
+
+  // Auto-open conversation if initialConversationId is provided
+  useEffect(() => {
+    if (initialConversationId && conversations.length > 0 && !selectedConversation) {
+      const conv = conversations.find((c: Conversation) => c.id === initialConversationId)
+      if (conv) {
+        setSelectedConversation(conv)
+      }
+    }
+  }, [initialConversationId, conversations, selectedConversation])
+
+  const pendingOffers: JobOffer[] = []
+  const bookingApplications: CastingApplication[] = []
 
   if (selectedConversation) {
     return (
@@ -126,10 +134,14 @@ export function InboxView({ onViewProfile }: InboxViewProps = {}) {
     )
   }
 
-  const handleMarkAllRead = () => {
-    if (user) {
-      markAllNotificationsRead(user.id)
-    }
+  const handleMarkAllRead = async () => {
+    await api.markAllNotificationsRead()
+    refreshNotifications()
+  }
+
+  const handleMarkOneRead = async (notificationId: string) => {
+    await api.markNotificationRead(notificationId)
+    refreshNotifications()
   }
 
   return (
@@ -246,7 +258,7 @@ export function InboxView({ onViewProfile }: InboxViewProps = {}) {
               <div className="mb-6">
                 <h3 className="text-sm font-medium text-muted-foreground mb-3">Pending Offers</h3>
                 {pendingOffers.map((offer) => (
-                  <OfferCard key={offer.id} offer={offer} onUpdate={updateOffer} />
+                  <OfferCard key={offer.id} offer={offer} onUpdate={() => {}} />
                 ))}
               </div>
             )}
@@ -261,7 +273,7 @@ export function InboxView({ onViewProfile }: InboxViewProps = {}) {
                   <NotificationItem
                     key={notification.id}
                     notification={notification}
-                    onRead={() => markNotificationRead(notification.id)}
+                    onRead={() => handleMarkOneRead(notification.id)}
                   />
                 ))}
               </div>

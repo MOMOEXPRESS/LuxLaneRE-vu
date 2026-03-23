@@ -95,6 +95,9 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
     fetchSubmissionAndSaved()
     // Track casting view
     api.trackCastingView(casting.id)
+    // Poll for status updates every 30s (so model sees brand-side changes)
+    const interval = setInterval(fetchSubmissionAndSaved, 30000)
+    return () => clearInterval(interval)
   }, [fetchSubmissionAndSaved, casting.id])
 
   const handleShare = () => {

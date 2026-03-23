@@ -946,6 +946,16 @@ export const api = {
     })
     return handleResponse(response)
   },
+
+  async getModels(params?: { unsigned?: boolean; query?: string; limit?: number }) {
+    const searchParams = new URLSearchParams()
+    if (params?.unsigned) searchParams.set("unsigned", "true")
+    if (params?.query) searchParams.set("query", params.query)
+    if (params?.limit) searchParams.set("limit", String(params.limit))
+    const qs = searchParams.toString()
+    const response = await fetch(`${API_BASE}/api/models${qs ? `?${qs}` : ""}`, { credentials: "include" })
+    return handleResponse(response)
+  },
 }
 
 export const apiClient = api
