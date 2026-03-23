@@ -281,7 +281,7 @@ export default function Home() {
       case "discover":
         return "Discover"
       case "models":
-        return "Models"
+        return user?.role === "agency" ? "Scout" : "Models"
       case "roster":
         return "My Models"
       case "inbox":

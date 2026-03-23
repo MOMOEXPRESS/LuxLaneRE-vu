@@ -251,128 +251,13 @@ async function main() {
     await prisma.follow.create({ data: { followerId: a, followingId: b } }).catch(() => {})
   }
 
-  // ── CASTINGS (8) ──
-  console.log("Creating castings...")
-  const now = new Date()
-  const futureDate = (days: number) => new Date(now.getTime() + days * 86400000)
+  // ── FRESH START ──
+  // No pre-made castings, submissions, posts, or conversations.
+  // Everything is user-generated from now on.
 
-  const castingDefs = [
-    { createdBy: brands[0], title: "Dior Spring 2025 Campaign", type: "CAMPAIGN" as const, desc: "Seeking diverse female models for our upcoming Spring 2025 campaign. Shot by Steven Meisel in Paris.", location: "Paris, France", payMin: 15000, payMax: 15000, start: futureDate(30), end: futureDate(35), deadline: futureDate(20), minH: 175, maxH: 185, tags: ["runway", "editorial"] },
-    { createdBy: brands[1], title: "Gucci Milan Fashion Week", type: "RUNWAY" as const, desc: "Gucci runway show for Milan Fashion Week. Strong walk required.", location: "Milan, Italy", payMin: 5000, payMax: 5000, start: futureDate(40), end: futureDate(41), deadline: futureDate(30), minH: 175, maxH: 185, tags: ["runway"] },
-    { createdBy: brands[2], title: "Chanel Haute Couture Fitting", type: "EVENT" as const, desc: "Fitting session for Chanel Haute Couture collection. Paris atelier.", location: "Paris, France", payMin: 800, payMax: 800, start: futureDate(15), end: futureDate(16), deadline: futureDate(10), minH: 172, maxH: 182, tags: ["couture", "fitting"] },
-    { createdBy: brands[3], title: "Prada Resort Lookbook", type: "EDITORIAL" as const, desc: "Prada Resort collection lookbook shoot in Sardinia.", location: "Sardinia, Italy", payMin: 8000, payMax: 8000, start: futureDate(45), end: futureDate(48), deadline: futureDate(35), minH: 174, maxH: 184, tags: ["editorial", "campaign"] },
-    { createdBy: agencies[0], title: "Elite New Faces 2025", type: "EVENT" as const, desc: "Annual scouting event. Open to all aspiring models.", location: "New York, NY", payMin: 0, payMax: 0, start: futureDate(60), end: futureDate(61), deadline: futureDate(50), minH: 165, maxH: 190, tags: ["scouting", "open-call"] },
-    { createdBy: agencies[1], title: "Next x Zara Campaign", type: "CAMPAIGN" as const, desc: "Next Models casting for Zara global campaign in Barcelona.", location: "Barcelona, Spain", payMin: 8000, payMax: 8000, start: futureDate(25), end: futureDate(29), deadline: futureDate(18), minH: 170, maxH: 185, tags: ["commercial", "campaign"] },
-    { createdBy: agencies[2], title: "IMG Worldwide Scouting", type: "EVENT" as const, desc: "IMG Models worldwide talent scouting. Virtual submissions accepted.", location: "Worldwide (Virtual)", payMin: 0, payMax: 0, start: futureDate(30), end: futureDate(60), deadline: futureDate(55), minH: 160, maxH: 195, tags: ["scouting"] },
-    { createdBy: brands[4], title: "Burberry Autumn Campaign", type: "CAMPAIGN" as const, desc: "Burberry looking for fresh faces for autumn campaign. London shoot.", location: "London, UK", payMin: 10000, payMax: 10000, start: futureDate(50), end: futureDate(53), deadline: futureDate(40), minH: 175, maxH: 185, tags: ["campaign", "editorial"] },
-  ]
-
-  const castings: string[] = []
-  for (const c of castingDefs) {
-    const casting = await prisma.casting.create({
-      data: {
-        createdBy: c.createdBy,
-        title: c.title,
-        type: c.type,
-        description: c.desc,
-        location: c.location,
-        payMin: c.payMin,
-        payMax: c.payMax,
-        startDate: c.start,
-        endDate: c.end,
-        deadline: c.deadline,
-        status: "ACTIVE",
-        verifiedOnly: c.payMin > 5000,
-        requirements: {
-          create: { minHeightCm: c.minH, maxHeightCm: c.maxH, tags: c.tags },
-        },
-      },
-    })
-    castings.push(casting.id)
-    console.log(`  Casting: ${c.title}`)
-  }
-
-  // ── SUBMISSIONS ──
-  console.log("Creating submissions...")
-  const submissionDefs: { castingIdx: number; modelIdx: number; status: string }[] = [
-    { castingIdx: 0, modelIdx: 0, status: "SHORTLISTED" },
-    { castingIdx: 0, modelIdx: 1, status: "APPLIED" },
-    { castingIdx: 0, modelIdx: 4, status: "APPLIED" },
-    { castingIdx: 0, modelIdx: 6, status: "SHORTLISTED" },
-    { castingIdx: 1, modelIdx: 0, status: "APPLIED" },
-    { castingIdx: 1, modelIdx: 4, status: "SHORTLISTED" },
-    { castingIdx: 1, modelIdx: 6, status: "APPLIED" },
-    { castingIdx: 2, modelIdx: 3, status: "ACCEPTED" },
-    { castingIdx: 2, modelIdx: 5, status: "APPLIED" },
-    { castingIdx: 3, modelIdx: 0, status: "APPLIED" },
-    { castingIdx: 3, modelIdx: 1, status: "APPLIED" },
-    { castingIdx: 3, modelIdx: 8, status: "SHORTLISTED" },
-    { castingIdx: 4, modelIdx: 2, status: "APPLIED" },
-    { castingIdx: 5, modelIdx: 4, status: "APPLIED" },
-    { castingIdx: 5, modelIdx: 3, status: "SHORTLISTED" },
-    { castingIdx: 6, modelIdx: 2, status: "APPLIED" },
-    { castingIdx: 6, modelIdx: 9, status: "APPLIED" },
-    { castingIdx: 7, modelIdx: 8, status: "APPLIED" },
-    { castingIdx: 7, modelIdx: 1, status: "SHORTLISTED" },
-  ]
-
-  for (const s of submissionDefs) {
-    await prisma.submission.create({
-      data: {
-        castingId: castings[s.castingIdx],
-        modelId: models[s.modelIdx],
-        submittedBy: models[s.modelIdx],
-        status: s.status as any,
-        note: s.status === "APPLIED" ? "I'm very interested in this opportunity!" : undefined,
-      },
-    })
-  }
-
-  // No pre-coded conversations or messages — all messaging is real-time user-driven
-
-  // ── POSTS ──
-  console.log("Creating posts...")
-  await prisma.post.create({
-    data: {
-      userId: models[0],
-      imageUrl: "/placeholder.svg?height=600&width=400&text=Behind+the+scenes",
-      caption: "Behind the scenes from yesterday's Dior shoot. Thank you to the incredible team.",
-    },
-  })
-  await prisma.post.create({
-    data: {
-      userId: brands[0],
-      imageUrl: "/placeholder.svg?height=600&width=400&text=Dior+SS25",
-      caption: "Introducing our Spring 2025 collection. Now casting.",
-    },
-  })
-  await prisma.post.create({
-    data: {
-      userId: models[4],
-      imageUrl: "/placeholder.svg?height=600&width=400&text=MFW+Runway",
-      caption: "Milan Fashion Week was a dream. Grateful for every moment on the runway.",
-    },
-  })
-  await prisma.post.create({
-    data: {
-      userId: agencies[0],
-      imageUrl: "/placeholder.svg?height=600&width=400&text=Elite+New+Faces",
-      caption: "Applications for Elite New Faces 2025 are now open! Link in bio.",
-    },
-  })
-  await prisma.post.create({
-    data: {
-      userId: models[6],
-      imageUrl: "/placeholder.svg?height=600&width=400&text=Couture+Week",
-      caption: "Paris Couture Week. Chanel and Valentino shows done!",
-    },
-  })
-
-  // No pre-coded notifications — all notifications are generated by real user actions
-
-  console.log("\n✅ Seed complete!")
+  console.log("\n✅ Seed complete! (Fresh start — accounts only)")
   console.log(`   ${brands.length} brands, ${agencies.length} agencies, ${models.length} models, ${clients.length} clients`)
-  console.log(`   ${castings.length} castings, ${submissionDefs.length} submissions, 5 posts`)
+  console.log(`   0 castings, 0 submissions, 0 posts — all content is user-generated`)
   console.log(`\n   Login: any email above + password "${TEST_PASSWORD}"`)
   console.log(`   Example: sofia@luxlane.demo / ${TEST_PASSWORD}`)
 }

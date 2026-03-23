@@ -21,7 +21,7 @@ export function getNavTabs(role: UserRole): NavTab[] {
     case "agency":
       return [
         { id: "home", label: "Home", icon: Home },
-        { id: "roster", label: "Models", icon: Users },
+        { id: "models", label: "Scout", icon: Search },
         { id: "castings", label: "Castings", icon: Briefcase },
         { id: "inbox", label: "Inbox", icon: MessageSquare },
       ]
