@@ -131,18 +131,18 @@ async function main() {
     console.log(`  Agency: ${a.name} (${a.email})`)
   }
 
-  // ── MODELS (10) ──
+  // ── MODELS (10) — all independent, no agency assignments ──
   const modelData = [
-    { ...TEST_ACCOUNTS.models[0], bio: "International runway model. Paris, Milan, NYC.", location: "Paris, France", heightCm: 180, bustCm: 81, waistCm: 61, hipsCm: 86, hair: "Brunette", eyes: "Green", shoe: "40 EU", agencyIdx: 0, score: 94, exp: ["Dior SS24", "Chanel Resort", "Prada FW23"] },
-    { ...TEST_ACCOUNTS.models[1], bio: "Shanghai-born, London-based. Editorial and high fashion.", location: "London, UK", heightCm: 178, bustCm: 80, waistCm: 60, hipsCm: 87, hair: "Black", eyes: "Brown", shoe: "39 EU", agencyIdx: 1, score: 88, exp: ["Valentino", "Bottega Veneta", "Vogue China Cover"] },
-    { ...TEST_ACCOUNTS.models[2], bio: "Aspiring model. NYC based. Open to collaborations.", location: "Brooklyn, NY", heightCm: 175, bustCm: 81, waistCm: 64, hipsCm: 89, hair: "Blonde", eyes: "Blue", shoe: "38 EU", agencyIdx: 2, score: 42, exp: [] },
-    { ...TEST_ACCOUNTS.models[3], bio: "Scandinavian beauty. Stockholm & Paris.", location: "Stockholm, Sweden", heightCm: 177, bustCm: 83, waistCm: 62, hipsCm: 90, hair: "Blonde", eyes: "Blue", shoe: "39 EU", agencyIdx: 0, score: 78, exp: ["H&M Global", "COS Campaign"] },
-    { ...TEST_ACCOUNTS.models[4], bio: "Milan Fashion Week regular. Gucci, Prada, Versace.", location: "Milan, Italy", heightCm: 178, bustCm: 84, waistCm: 61, hipsCm: 89, hair: "Black", eyes: "Brown", shoe: "39 EU", agencyIdx: 1, score: 87, exp: ["Gucci FW24", "Prada SS24", "Versace Resort"] },
-    { ...TEST_ACCOUNTS.models[5], bio: "Parisian chic. Commercial and editorial.", location: "Paris, France", heightCm: 176, bustCm: 82, waistCm: 62, hipsCm: 88, hair: "Auburn", eyes: "Hazel", shoe: "38 EU", agencyIdx: 2, score: 72, exp: ["L'Oréal Paris", "Dior Beauty"] },
-    { ...TEST_ACCOUNTS.models[6], bio: "Top model. Specializing in haute couture and runway.", location: "Moscow, Russia", heightCm: 182, bustCm: 80, waistCm: 59, hipsCm: 87, hair: "Blonde", eyes: "Blue", shoe: "41 EU", agencyIdx: 3, score: 98, exp: ["Chanel Couture", "Louis Vuitton", "Balenciaga"] },
-    { ...TEST_ACCOUNTS.models[7], bio: "French model. Runway and beauty.", location: "Lyon, France", heightCm: 179, bustCm: 81, waistCm: 60, hipsCm: 87, hair: "Brown", eyes: "Green", shoe: "39 EU", agencyIdx: 4, score: 75, exp: ["YSL", "Celine"] },
-    { ...TEST_ACCOUNTS.models[8], bio: "Nigerian-British model. London & Lagos.", location: "London, UK", heightCm: 181, bustCm: 82, waistCm: 60, hipsCm: 88, hair: "Black", eyes: "Brown", shoe: "40 EU", agencyIdx: 5, score: 91, exp: ["Burberry AW24", "Alexander McQueen"] },
-    { ...TEST_ACCOUNTS.models[9], bio: "Korean-American. Fashion and commercial.", location: "Seoul, South Korea", heightCm: 174, bustCm: 80, waistCm: 61, hipsCm: 86, hair: "Black", eyes: "Brown", shoe: "37 EU", agencyIdx: 6, score: 69, exp: ["Samsung", "Gentle Monster"] },
+    { ...TEST_ACCOUNTS.models[0], bio: "International runway model. Paris, Milan, NYC.", location: "Paris, France", heightCm: 180, bustCm: 81, waistCm: 61, hipsCm: 86, hair: "Brunette", eyes: "Green", shoe: "40 EU", score: 94, exp: ["Dior SS24", "Chanel Resort", "Prada FW23"] },
+    { ...TEST_ACCOUNTS.models[1], bio: "Shanghai-born, London-based. Editorial and high fashion.", location: "London, UK", heightCm: 178, bustCm: 80, waistCm: 60, hipsCm: 87, hair: "Black", eyes: "Brown", shoe: "39 EU", score: 88, exp: ["Valentino", "Bottega Veneta", "Vogue China Cover"] },
+    { ...TEST_ACCOUNTS.models[2], bio: "Aspiring model. NYC based. Open to collaborations.", location: "Brooklyn, NY", heightCm: 175, bustCm: 81, waistCm: 64, hipsCm: 89, hair: "Blonde", eyes: "Blue", shoe: "38 EU", score: 42, exp: [] },
+    { ...TEST_ACCOUNTS.models[3], bio: "Scandinavian beauty. Stockholm & Paris.", location: "Stockholm, Sweden", heightCm: 177, bustCm: 83, waistCm: 62, hipsCm: 90, hair: "Blonde", eyes: "Blue", shoe: "39 EU", score: 78, exp: ["H&M Global", "COS Campaign"] },
+    { ...TEST_ACCOUNTS.models[4], bio: "Milan Fashion Week regular. Gucci, Prada, Versace.", location: "Milan, Italy", heightCm: 178, bustCm: 84, waistCm: 61, hipsCm: 89, hair: "Black", eyes: "Brown", shoe: "39 EU", score: 87, exp: ["Gucci FW24", "Prada SS24", "Versace Resort"] },
+    { ...TEST_ACCOUNTS.models[5], bio: "Parisian chic. Commercial and editorial.", location: "Paris, France", heightCm: 176, bustCm: 82, waistCm: 62, hipsCm: 88, hair: "Auburn", eyes: "Hazel", shoe: "38 EU", score: 72, exp: ["L'Oréal Paris", "Dior Beauty"] },
+    { ...TEST_ACCOUNTS.models[6], bio: "Top model. Specializing in haute couture and runway.", location: "Moscow, Russia", heightCm: 182, bustCm: 80, waistCm: 59, hipsCm: 87, hair: "Blonde", eyes: "Blue", shoe: "41 EU", score: 98, exp: ["Chanel Couture", "Louis Vuitton", "Balenciaga"] },
+    { ...TEST_ACCOUNTS.models[7], bio: "French model. Runway and beauty.", location: "Lyon, France", heightCm: 179, bustCm: 81, waistCm: 60, hipsCm: 87, hair: "Brown", eyes: "Green", shoe: "39 EU", score: 75, exp: ["YSL", "Celine"] },
+    { ...TEST_ACCOUNTS.models[8], bio: "Nigerian-British model. London & Lagos.", location: "London, UK", heightCm: 181, bustCm: 82, waistCm: 60, hipsCm: 88, hair: "Black", eyes: "Brown", shoe: "40 EU", score: 91, exp: ["Burberry AW24", "Alexander McQueen"] },
+    { ...TEST_ACCOUNTS.models[9], bio: "Korean-American. Fashion and commercial.", location: "Seoul, South Korea", heightCm: 174, bustCm: 80, waistCm: 61, hipsCm: 86, hair: "Black", eyes: "Brown", shoe: "37 EU", score: 69, exp: ["Samsung", "Gentle Monster"] },
   ]
 
   const models: string[] = []
@@ -177,7 +177,6 @@ async function main() {
             hair: m.hair,
             eyes: m.eyes,
             languages: ["English"],
-            agencyId: agencies[m.agencyIdx],
             verificationLevel: m.score > 70 ? "LUXLANE_VERIFIED" : m.score > 40 ? "AGENCY_VERIFIED" : "UNVERIFIED",
             luxlaneScore: m.score,
           },
@@ -186,7 +185,7 @@ async function main() {
       },
     })
     models.push(user.id)
-    console.log(`  Model: ${m.name} (${m.email}) → Agency: ${agencyData[m.agencyIdx].name}`)
+    console.log(`  Model: ${m.name} (${m.email}) — independent`)
   }
 
   // ── CLIENTS (10) ──
@@ -251,13 +250,65 @@ async function main() {
     await prisma.follow.create({ data: { followerId: a, followingId: b } }).catch(() => {})
   }
 
-  // ── FRESH START ──
-  // No pre-made castings, submissions, posts, or conversations.
-  // Everything is user-generated from now on.
+  // ── CASTINGS (8) ──
+  console.log("Creating castings...")
+  const now = new Date()
+  const futureDate = (days: number) => new Date(now.getTime() + days * 86400000)
 
-  console.log("\n✅ Seed complete! (Fresh start — accounts only)")
+  const castingDefs = [
+    { createdBy: brands[0], title: "Dior Spring 2025 Campaign", type: "CAMPAIGN" as const, desc: "Seeking diverse female models for our upcoming Spring 2025 campaign. Shot by Steven Meisel in Paris.", location: "Paris, France", payMin: 15000, payMax: 15000, start: futureDate(30), end: futureDate(35), deadline: futureDate(20), minH: 175, maxH: 185, tags: ["runway", "editorial"] },
+    { createdBy: brands[1], title: "Gucci Milan Fashion Week", type: "RUNWAY" as const, desc: "Gucci runway show for Milan Fashion Week. Strong walk required.", location: "Milan, Italy", payMin: 5000, payMax: 5000, start: futureDate(40), end: futureDate(41), deadline: futureDate(30), minH: 175, maxH: 185, tags: ["runway"] },
+    { createdBy: brands[2], title: "Chanel Haute Couture Fitting", type: "EVENT" as const, desc: "Fitting session for Chanel Haute Couture collection. Paris atelier.", location: "Paris, France", payMin: 800, payMax: 800, start: futureDate(15), end: futureDate(16), deadline: futureDate(10), minH: 172, maxH: 182, tags: ["couture", "fitting"] },
+    { createdBy: brands[3], title: "Prada Resort Lookbook", type: "EDITORIAL" as const, desc: "Prada Resort collection lookbook shoot in Sardinia.", location: "Sardinia, Italy", payMin: 8000, payMax: 8000, start: futureDate(45), end: futureDate(48), deadline: futureDate(35), minH: 174, maxH: 184, tags: ["editorial", "campaign"] },
+    { createdBy: agencies[0], title: "Elite New Faces 2025", type: "EVENT" as const, desc: "Annual scouting event. Open to all aspiring models.", location: "New York, NY", payMin: 0, payMax: 0, start: futureDate(60), end: futureDate(61), deadline: futureDate(50), minH: 165, maxH: 190, tags: ["scouting", "open-call"] },
+    { createdBy: agencies[1], title: "Next x Zara Campaign", type: "CAMPAIGN" as const, desc: "Next Models casting for Zara global campaign in Barcelona.", location: "Barcelona, Spain", payMin: 8000, payMax: 8000, start: futureDate(25), end: futureDate(29), deadline: futureDate(18), minH: 170, maxH: 185, tags: ["commercial", "campaign"] },
+    { createdBy: agencies[2], title: "IMG Worldwide Scouting", type: "EVENT" as const, desc: "IMG Models worldwide talent scouting. Virtual submissions accepted.", location: "Worldwide (Virtual)", payMin: 0, payMax: 0, start: futureDate(30), end: futureDate(60), deadline: futureDate(55), minH: 160, maxH: 195, tags: ["scouting"] },
+    { createdBy: brands[4], title: "Burberry Autumn Campaign", type: "CAMPAIGN" as const, desc: "Burberry looking for fresh faces for autumn campaign. London shoot.", location: "London, UK", payMin: 10000, payMax: 10000, start: futureDate(50), end: futureDate(53), deadline: futureDate(40), minH: 175, maxH: 185, tags: ["campaign", "editorial"] },
+  ]
+
+  const castings: string[] = []
+  for (const c of castingDefs) {
+    const casting = await prisma.casting.create({
+      data: {
+        createdBy: c.createdBy,
+        title: c.title,
+        type: c.type,
+        description: c.desc,
+        location: c.location,
+        payMin: c.payMin,
+        payMax: c.payMax,
+        startDate: c.start,
+        endDate: c.end,
+        deadline: c.deadline,
+        status: "ACTIVE",
+        verifiedOnly: c.payMin > 5000,
+        requirements: {
+          create: { minHeightCm: c.minH, maxHeightCm: c.maxH, tags: c.tags },
+        },
+      },
+    })
+    castings.push(casting.id)
+    console.log(`  Casting: ${c.title}`)
+  }
+
+  // No pre-made submissions — all applications are user-generated
+
+  // ── POSTS ──
+  console.log("Creating posts...")
+  await prisma.post.create({
+    data: { userId: brands[0], imageUrl: "/placeholder.svg?height=600&width=400&text=Dior+SS25", caption: "Introducing our Spring 2025 collection. Now casting." },
+  })
+  await prisma.post.create({
+    data: { userId: agencies[0], imageUrl: "/placeholder.svg?height=600&width=400&text=Elite+New+Faces", caption: "Applications for Elite New Faces 2025 are now open! Link in bio." },
+  })
+  await prisma.post.create({
+    data: { userId: brands[1], imageUrl: "/placeholder.svg?height=600&width=400&text=Gucci+MFW", caption: "Milan Fashion Week is calling. Are you ready?" },
+  })
+
+  console.log("\n✅ Seed complete!")
   console.log(`   ${brands.length} brands, ${agencies.length} agencies, ${models.length} models, ${clients.length} clients`)
-  console.log(`   0 castings, 0 submissions, 0 posts — all content is user-generated`)
+  console.log(`   ${castings.length} castings, 0 submissions, 3 posts`)
+  console.log(`   All models are independent — no agency assignments`)
   console.log(`\n   Login: any email above + password "${TEST_PASSWORD}"`)
   console.log(`   Example: sofia@luxlane.demo / ${TEST_PASSWORD}`)
 }
