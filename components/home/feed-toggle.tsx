@@ -16,7 +16,7 @@ export function FeedToggle({ active, onChange }: FeedToggleProps) {
           active === "foryou" ? "text-foreground" : "text-muted-foreground"
         }`}
       >
-        For You
+        Explore
         {active === "foryou" && (
           <motion.div layoutId="feed-indicator" className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground" />
         )}
