@@ -266,6 +266,25 @@ export const api = {
     return handleResponse(response)
   },
 
+  // Search
+  async search(query: string, type?: string) {
+    const params = new URLSearchParams({ q: query })
+    if (type) params.set("type", type)
+    const response = await fetch(`${API_BASE}/api/search?${params}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  // Password reset
+  async resetPassword(email: string, newPassword?: string) {
+    const response = await fetch(`${API_BASE}/api/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, newPassword }),
+    })
+    return handleResponse(response)
+  },
+
   // Posts (feed)
   async getPosts(params?: { limit?: number; cursor?: string; feed?: string }) {
     const searchParams = new URLSearchParams()
