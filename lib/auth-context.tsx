@@ -52,7 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // On mount: clear any stale session so user always starts at login
+  // On mount: check if user logged in during this browser session
+  // If sessionStorage has "luxlane_logged_in", restore from API
+  // Otherwise show login page (don't auto-login from stale cookies)
   useEffect(() => {
     if (USE_MOCK_DATA) {
       setIsLoading(false)
@@ -60,9 +62,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     async function init() {
-      // Clear cookies on fresh page load to force login
-      await api.logout()
-      setUser(null)
+      const wasLoggedIn = typeof window !== "undefined" && sessionStorage.getItem("luxlane_logged_in")
+      if (wasLoggedIn) {
+        // Restore session from cookie
+        const result = await api.getCurrentUser()
+        if (result.data?.user) {
+          setUser(apiUserToUser(result.data.user))
+        } else {
+          // Cookie expired — clear flag
+          sessionStorage.removeItem("luxlane_logged_in")
+        }
+      }
       setIsLoading(false)
     }
     init()
@@ -119,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (result.data?.user) {
       setUser(apiUserToUser(result.data.user))
+      if (typeof window !== "undefined") sessionStorage.setItem("luxlane_logged_in", "1")
       return { success: true }
     }
 
@@ -161,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (result.data?.user) {
       setUser(apiUserToUser(result.data.user))
+      if (typeof window !== "undefined") sessionStorage.setItem("luxlane_logged_in", "1")
       return true
     }
 
@@ -171,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!USE_MOCK_DATA) {
       await api.logout()
     }
+    if (typeof window !== "undefined") sessionStorage.removeItem("luxlane_logged_in")
     setUser(null)
   }, [])
 
