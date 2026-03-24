@@ -106,10 +106,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     castingsLoaded: false,
   })
 
-  // Load castings + applications from real DB on mount
+  // Load castings on mount + reload every 30s to stay fresh
   useEffect(() => {
     loadCastings()
     loadApplications()
+    const interval = setInterval(() => {
+      loadCastings()
+      loadApplications()
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   async function loadCastings() {
