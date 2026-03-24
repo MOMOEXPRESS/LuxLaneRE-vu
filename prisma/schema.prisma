@@ -88,6 +88,8 @@ model User {
   bio             String?
   locationCity    String?   @map("location_city")
   avatarUrl       String?   @map("avatar_url")
+  isDemo          Boolean   @default(false) @map("is_demo")
+  authProvider    String    @default("credentials") @map("auth_provider")
   onboardingComplete Boolean? @default(false) @map("onboarding_complete")
   createdAt       DateTime? @default(now()) @map("created_at")
   updatedAt       DateTime? @updatedAt @map("updated_at")
@@ -130,6 +132,13 @@ model User {
   highlights          StoryHighlight[]      @relation("userHighlights")
   brandBookings       DirectBooking[]       @relation("brandBookings")
   modelBookings       DirectBooking[]       @relation("modelBookings")
+  modelAgenciesAsModel  ModelAgency[]       @relation("modelAgencyModel")
+  modelAgenciesAsAgency ModelAgency[]       @relation("modelAgencyAgency")
+  workCredits           WorkCredit[]        @relation("modelCredits")
+  confirmedCredits      WorkCredit[]        @relation("confirmedCredits")
+  endorsementsReceived  Endorsement[]       @relation("endorsementsReceived")
+  endorsementsGiven     Endorsement[]       @relation("endorsementsGiven")
+  jobAlerts             JobAlert[]
 
   @@map("users")
 }
@@ -240,6 +249,24 @@ model AgencyApplication {
   @@unique([modelId, agencyId])
   @@index([agencyId, status])
   @@map("agency_applications")
+}
+
+model ModelAgency {
+  id             String    @id @default(uuid())
+  modelId        String    @map("model_id")
+  agencyId       String    @map("agency_id")
+  status         String    @default("PENDING") // PENDING, INVITED, APPROVED, WAITING_CONTRACT, ACTIVE, DECLINED
+  contractStatus String    @default("NONE") @map("contract_status") // NONE, PENDING, SIGNED, EXPIRED
+  joinedAt       DateTime? @map("joined_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  model  User @relation("modelAgencyModel", fields: [modelId], references: [id], onDelete: Cascade)
+  agency User @relation("modelAgencyAgency", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, agencyId])
+  @@index([agencyId, status])
+  @@map("model_agencies")
 }
 
 model AvailabilityDate {
@@ -493,7 +520,9 @@ model UserSettings {
 model Post {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
-  imageUrl  String   @map("image_url")
+  imageUrl  String   @map("image_url") // Primary image (backward compat)
+  mediaUrls Json     @default("[]") @map("media_urls") // JSON array for carousel
+  mediaType String   @default("image") @map("media_type") // "image" | "video" | "carousel"
   caption   String?
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -537,12 +566,16 @@ model Comment {
   postId    String   @map("post_id")
   userId    String   @map("user_id")
   body      String
+  parentId  String?  @map("parent_id")
   createdAt DateTime @default(now()) @map("created_at")
 
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies Comment[] @relation("CommentReplies")
 
   @@index([postId])
+  @@index([parentId])
   @@map("comments")
 }
 
@@ -709,4 +742,57 @@ model DirectBooking {
   @@index([brandId])
   @@index([modelId])
   @@map("direct_bookings")
+}
+
+// ── Phase 5: Industry Features ──
+
+model WorkCredit {
+  id           String    @id @default(uuid())
+  modelId      String    @map("model_id")
+  brandName    String    @map("brand_name")
+  projectTitle String    @map("project_title")
+  role         String?
+  photographer String?
+  year         Int?
+  type         String    @default("campaign") // campaign, editorial, runway, commercial, video
+  confirmedBy  String?   @map("confirmed_by")
+  confirmedAt  DateTime? @map("confirmed_at")
+  imageUrl     String?   @map("image_url")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  model     User  @relation("modelCredits", fields: [modelId], references: [id], onDelete: Cascade)
+  confirmer User? @relation("confirmedCredits", fields: [confirmedBy], references: [id], onDelete: SetNull)
+
+  @@index([modelId])
+  @@map("work_credits")
+}
+
+model Endorsement {
+  id         String   @id @default(uuid())
+  modelId    String   @map("model_id")
+  endorserId String   @map("endorser_id")
+  text       String
+  tags       String[] @default([])
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  model    User @relation("endorsementsReceived", fields: [modelId], references: [id], onDelete: Cascade)
+  endorser User @relation("endorsementsGiven", fields: [endorserId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, endorserId])
+  @@index([modelId])
+  @@map("endorsements")
+}
+
+model JobAlert {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  criteria     Json      @default("{}")
+  active       Boolean   @default(true)
+  lastNotified DateTime? @map("last_notified")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("job_alerts")
 }

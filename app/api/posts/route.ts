@@ -8,8 +8,37 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const limit = Math.min(Number(searchParams.get("limit")) || 20, 50)
     const cursor = searchParams.get("cursor")
+    const feed = searchParams.get("feed") // "following" or null (all)
+
+    // Build where clause — filter by followed users if feed=following
+    let where: Record<string, unknown> = {}
+
+    // Get blocked user IDs to exclude from feed
+    let blockedIds: string[] = []
+    if (currentUser) {
+      const blocks = await prisma.block.findMany({
+        where: { OR: [{ blockerId: currentUser.id }, { blockedId: currentUser.id }] },
+        select: { blockerId: true, blockedId: true },
+      })
+      blockedIds = blocks.map((b: { blockerId: string; blockedId: string }) =>
+        b.blockerId === currentUser.id ? b.blockedId : b.blockerId
+      )
+    }
+
+    if (feed === "following" && currentUser) {
+      const follows = await prisma.follow.findMany({
+        where: { followerId: currentUser.id },
+        select: { followingId: true },
+      })
+      const followedIds = follows.map((f: { followingId: string }) => f.followingId)
+      const allowedIds = [currentUser.id, ...followedIds].filter((id) => !blockedIds.includes(id))
+      where = { userId: { in: allowedIds } }
+    } else if (blockedIds.length > 0) {
+      where = { userId: { notIn: blockedIds } }
+    }
 
     const posts = await prisma.post.findMany({
+      where,
       take: limit + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
       orderBy: { createdAt: "desc" },
@@ -95,6 +124,32 @@ export async function POST(request: NextRequest) {
         _count: { select: { likes: true, comments: true } },
       },
     })
+
+    // Extract @mentions from caption and send notifications
+    if (caption) {
+      const mentions = caption.match(/@([\w]+)/g)?.map((m: string) => m.slice(1)) || []
+      if (mentions.length > 0) {
+        const mentionedUsers = await prisma.user.findMany({
+          where: { username: { in: mentions } },
+          select: { id: true, username: true },
+        })
+        for (const mu of mentionedUsers) {
+          if (mu.id !== user.id) {
+            await prisma.notification.create({
+              data: {
+                userId: mu.id,
+                type: "SYSTEM",
+                payload: {
+                  title: "You were mentioned",
+                  message: `${user.displayName || user.username} mentioned you in a post`,
+                  postId: post.id,
+                },
+              },
+            }).catch(() => {})
+          }
+        }
+      }
+    }
 
     return NextResponse.json({
       post: {

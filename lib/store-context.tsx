@@ -106,9 +106,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     castingsLoaded: false,
   })
 
-  // Load castings from real DB on mount
+  // Load castings + applications from real DB on mount
   useEffect(() => {
     loadCastings()
+    loadApplications()
   }, [])
 
   async function loadCastings() {
@@ -126,8 +127,46 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function loadApplications() {
+    try {
+      const res = await api.getJobHistory()
+      const data = res.data as { submissions?: Record<string, any>[] } | undefined
+      if (data?.submissions && Array.isArray(data.submissions)) {
+        const applications: CastingApplication[] = data.submissions.map((s: Record<string, any>) => ({
+          id: s.id,
+          castingId: s.castingId,
+          casting: s.casting ? apiCastingToFrontend(s.casting) : undefined,
+          modelId: s.modelId,
+          model: {
+            id: s.model?.id || s.modelId,
+            name: s.model?.displayName || s.model?.username || "Model",
+            username: s.model?.username || "",
+            avatar: s.model?.avatarUrl || "/placeholder.svg",
+            role: "model" as const,
+            email: "",
+            verified: false,
+            verificationLevel: "unverified" as const,
+            bio: "",
+            location: "",
+            followers: 0,
+            following: 0,
+            createdAt: new Date(),
+          },
+          status: (s.status || "applied").toLowerCase(),
+          message: s.note || "",
+          submittedAt: new Date(s.createdAt || Date.now()),
+          updatedAt: new Date(s.updatedAt || Date.now()),
+        }))
+        setState((prev) => ({ ...prev, applications }))
+      }
+    } catch {
+      // silently fail — no submissions yet
+    }
+  }
+
   const refreshCastings = useCallback(async () => {
     await loadCastings()
+    await loadApplications()
   }, [])
 
   // Getters

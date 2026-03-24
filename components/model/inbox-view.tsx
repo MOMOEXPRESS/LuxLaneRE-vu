@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
+import { useStore } from "@/lib/store-context"
 import { useConversations, useMessages } from "@/lib/hooks/use-conversations"
+import { useNotifications } from "@/lib/hooks/use-notifications"
 import { api } from "@/lib/api-client"
 import type { User as UserType } from "@/lib/types"
-import { useStore } from "@/lib/store-context"
 import type { Conversation, Message, JobOffer, Notification, CastingApplication } from "@/lib/types"
 import {
   ArrowLeft,
@@ -34,6 +35,7 @@ type InboxTab = "messages" | "bookings" | "notifications"
 
 interface InboxViewProps {
   onViewProfile?: (user: import("@/lib/types").User) => void
+  initialConversationId?: string | null
 }
 
 function mapApiConversationToConversation(apiConv: {
@@ -87,33 +89,45 @@ function mapApiConversationToConversation(apiConv: {
   }
 }
 
-export function InboxView({ onViewProfile }: InboxViewProps = {}) {
+export function InboxView({ onViewProfile, initialConversationId }: InboxViewProps = {}) {
   const { user } = useAuth()
   const { conversations: apiConversations, isLoading: conversationsLoading, refresh: refreshConversations } = useConversations()
-  const {
-    getNotificationsForUser,
-    getUnreadNotificationsCount,
-    markNotificationRead,
-    markAllNotificationsRead,
-    getOffersForModel,
-    getPendingOffersForModel,
-    updateOffer,
-    updateApplication,
-    getApplicationsForModel,
-  } = useStore()
+  const { notifications: apiNotifications, unreadCount, refresh: refreshNotifications } = useNotifications()
   const [activeTab, setActiveTab] = useState<InboxTab>("messages")
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
 
   const conversations = (apiConversations ?? []).map(mapApiConversationToConversation)
 
-  const notifications = user ? getNotificationsForUser(user.id) : []
-  const unreadCount = user ? getUnreadNotificationsCount(user.id) : 0
-  const offers = user ? getOffersForModel(user.id) : []
-  const pendingOffers = user ? getPendingOffersForModel(user.id) : []
-  const modelApplications = user ? getApplicationsForModel(user.id) : []
-  const bookingApplications = modelApplications.filter(
-    (a) => a.status === "accepted" || a.status === "shortlisted"
+  // Map API notifications to frontend Notification type
+  const notifications: Notification[] = (apiNotifications ?? []).map((n: any) => ({
+    id: n.id,
+    userId: n.userId || user?.id || "",
+    type: n.type?.toLowerCase() || "system",
+    title: n.payload?.title || n.title || "Notification",
+    message: n.payload?.message || n.payload?.body || n.message || "",
+    read: n.read ?? false,
+    actionUrl: n.payload?.castingId ? `/castings/${n.payload.castingId}` : undefined,
+    metadata: n.payload || {},
+    createdAt: new Date(n.createdAt),
+  }))
+
+  // Auto-open conversation if initialConversationId is provided
+  useEffect(() => {
+    if (initialConversationId && conversations.length > 0 && !selectedConversation) {
+      const conv = conversations.find((c: Conversation) => c.id === initialConversationId)
+      if (conv) {
+        setSelectedConversation(conv)
+      }
+    }
+  }, [initialConversationId, conversations, selectedConversation])
+
+  // Fetch real bookings from store (loaded from DB)
+  const { getApplicationsForModel } = useStore()
+  const allApplications = user ? getApplicationsForModel(user.id) : []
+  const bookingApplications = allApplications.filter(
+    (a) => a.status === "accepted" || a.status === "shortlisted" || a.status === "offered" || a.status === "confirmed"
   )
+  const pendingOffers: JobOffer[] = []
 
   if (selectedConversation) {
     return (
@@ -126,10 +140,14 @@ export function InboxView({ onViewProfile }: InboxViewProps = {}) {
     )
   }
 
-  const handleMarkAllRead = () => {
-    if (user) {
-      markAllNotificationsRead(user.id)
-    }
+  const handleMarkAllRead = async () => {
+    await api.markAllNotificationsRead()
+    refreshNotifications()
+  }
+
+  const handleMarkOneRead = async (notificationId: string) => {
+    await api.markNotificationRead(notificationId)
+    refreshNotifications()
   }
 
   return (
@@ -246,7 +264,7 @@ export function InboxView({ onViewProfile }: InboxViewProps = {}) {
               <div className="mb-6">
                 <h3 className="text-sm font-medium text-muted-foreground mb-3">Pending Offers</h3>
                 {pendingOffers.map((offer) => (
-                  <OfferCard key={offer.id} offer={offer} onUpdate={updateOffer} />
+                  <OfferCard key={offer.id} offer={offer} onUpdate={() => {}} />
                 ))}
               </div>
             )}
@@ -261,7 +279,7 @@ export function InboxView({ onViewProfile }: InboxViewProps = {}) {
                   <NotificationItem
                     key={notification.id}
                     notification={notification}
-                    onRead={() => markNotificationRead(notification.id)}
+                    onRead={() => handleMarkOneRead(notification.id)}
                   />
                 ))}
               </div>
@@ -445,10 +463,18 @@ function ChatView({
     return format(date, "MMMM d, yyyy")
   }
 
+  // Poll for new messages every 3 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshMessages()
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [refreshMessages])
+
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+    <div className="flex flex-col" style={{ height: "calc(100vh - 7rem)" }}>
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-border">
+      <div className="flex items-center gap-3 p-4 border-b border-border shrink-0">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
@@ -466,46 +492,54 @@ function ChatView({
               <span className="font-medium truncate">{otherUser.name}</span>
               {otherUser.verified && <BadgeCheck className="w-4 h-4 shrink-0" />}
             </div>
-            <p className="text-xs text-muted-foreground truncate">{otherUser.role}</p>
+            <p className="text-xs text-muted-foreground truncate capitalize">{otherUser.role}</p>
           </div>
         </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {groupMessagesByDate(messages).map((group) => (
-          <div key={group.date}>
-            <div className="text-center mb-4">
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
-                {formatDateHeader(group.date)}
-              </span>
-            </div>
-            <div className="space-y-2">
-              {group.messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.senderId === user?.id ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-[80%] px-4 py-2 rounded-2xl ${
-                      msg.senderId === user?.id
-                        ? "bg-foreground text-background rounded-br-md"
-                        : "bg-muted rounded-bl-md"
-                    }`}
-                  >
-                    <p className="text-sm">{msg.content}</p>
-                    <p
-                      className={`text-[10px] mt-1 ${msg.senderId === user?.id ? "text-background/60" : "text-muted-foreground"}`}
-                    >
-                      {format(msg.createdAt, "HH:mm")}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+        {messagesLoading && messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading messages…</div>
+        ) : messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+            No messages yet. Say hello! 👋
           </div>
-        ))}
+        ) : (
+          groupMessagesByDate(messages).map((group) => (
+            <div key={group.date}>
+              <div className="text-center mb-4">
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                  {formatDateHeader(group.date)}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {group.messages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.senderId === user?.id ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[80%] px-4 py-2 rounded-2xl ${
+                        msg.senderId === user?.id
+                          ? "bg-foreground text-background rounded-br-md"
+                          : "bg-muted rounded-bl-md"
+                      }`}
+                    >
+                      <p className="text-sm">{msg.content}</p>
+                      <p
+                        className={`text-[10px] mt-1 ${msg.senderId === user?.id ? "text-background/60" : "text-muted-foreground"}`}
+                      >
+                        {format(msg.createdAt, "HH:mm")}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
-      {/* Input */}
-      <div className="p-4 border-t border-border safe-area-bottom">
+      {/* Input — always visible */}
+      <div className="p-3 border-t border-border shrink-0 bg-background">
         <div className="flex items-center gap-2">
           <Input
             value={message}
@@ -513,6 +547,7 @@ function ChatView({
             placeholder="Type a message..."
             className="flex-1 h-11"
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            autoFocus
           />
           <Button size="icon" onClick={handleSend} disabled={!message.trim()} className="h-11 w-11">
             <Send className="w-4 h-4" />

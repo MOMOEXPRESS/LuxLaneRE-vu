@@ -6,8 +6,8 @@ import { api } from "@/lib/api-client"
 export function useNotifications(unreadOnly?: boolean) {
   const { data, error, isLoading, mutate } = useSWR(
     `notifications${unreadOnly ? "?unread" : ""}`,
-    () => api.getNotifications(unreadOnly).then((r) => r.data),
-    { revalidateOnFocus: true, refreshInterval: 30000 }, // Poll every 30s
+    () => api.getNotifications(unreadOnly).then((r) => r.data as any),
+    { revalidateOnFocus: true, refreshInterval: 15000 }, // Poll every 15s
   )
 
   return {

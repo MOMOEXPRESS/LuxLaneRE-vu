@@ -95,6 +95,11 @@ export function ProfileView({
   const [addPortfolioError, setAddPortfolioError] = useState<string | null>(null)
 
   const [hasAppliedToAgency, setHasAppliedToAgency] = useState(false)
+  const [showAgencyApplySheet, setShowAgencyApplySheet] = useState(false)
+  const [agencyApplyStep, setAgencyApplyStep] = useState(1)
+  const [agencyApplyNote, setAgencyApplyNote] = useState("")
+  const [agencyApplyLoading, setAgencyApplyLoading] = useState(false)
+  const [agencyApplyError, setAgencyApplyError] = useState<string | null>(null)
 
   // Block/Report/Save state
   const [showMoreMenu, setShowMoreMenu] = useState(false)
@@ -471,9 +476,11 @@ export function ProfileView({
             </div>
           ) : (
             <Button
-              onClick={async () => {
-                const res = await api.applyToAgency(user.id)
-                if (!res.error) setHasAppliedToAgency(true)
+              onClick={() => {
+                setAgencyApplyStep(1)
+                setAgencyApplyNote("")
+                setAgencyApplyError(null)
+                setShowAgencyApplySheet(true)
               }}
               className="w-full h-12 rounded-xl font-semibold text-base"
             >
@@ -837,16 +844,17 @@ export function ProfileView({
                 )}
 
                 {/* Agency */}
-                {user.agencyId && (
+                {user.agencyId && user.agencyName && (
                   <Card className="p-4">
                     <h3 className="font-semibold mb-3">Represented By</h3>
                     <div className="flex items-center gap-3">
                       <Avatar className="w-10 h-10">
-                        <AvatarFallback>AG</AvatarFallback>
+                        <AvatarImage src={user.agencyAvatar || "/placeholder.svg"} />
+                        <AvatarFallback>{user.agencyName?.[0] || "A"}</AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium">Elite Model Management</p>
-                        <p className="text-sm text-muted-foreground">New York</p>
+                        <p className="font-medium">{user.agencyName}</p>
+                        <p className="text-sm text-muted-foreground">{user.agencyLocation || "Agency"}</p>
                       </div>
                     </div>
                   </Card>
@@ -1173,6 +1181,126 @@ export function ProfileView({
           onProfileUpdated?.()
         }}
       />
+
+      {/* Agency Application Sheet */}
+      <Sheet open={showAgencyApplySheet} onOpenChange={setShowAgencyApplySheet}>
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>
+              {agencyApplyStep === 1 && "Review Your Profile"}
+              {agencyApplyStep === 2 && "Cover Letter"}
+              {agencyApplyStep === 3 && "Submit Application"}
+            </SheetTitle>
+          </SheetHeader>
+
+          {/* Step indicators */}
+          <div className="flex gap-1 mt-4 mb-6">
+            {[1, 2, 3].map((s) => (
+              <div
+                key={s}
+                className={`flex-1 h-1 rounded-full transition-colors ${s <= agencyApplyStep ? "bg-foreground" : "bg-muted"}`}
+              />
+            ))}
+          </div>
+
+          <div className="space-y-6">
+            {/* Step 1: Profile Review */}
+            {agencyApplyStep === 1 && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Your profile will be sent to {user.name}. Make sure it's up to date.
+                </p>
+                <Card className="p-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="w-14 h-14">
+                      <AvatarImage src={currentUser?.avatar || "/placeholder.svg"} />
+                      <AvatarFallback>{currentUser?.name?.[0]}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-semibold">{currentUser?.name}</p>
+                      <p className="text-sm text-muted-foreground">@{currentUser?.username}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground">Location</p>
+                      <p className="text-sm font-medium">{currentUser?.location || "Not set"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground">Height</p>
+                      <p className="text-sm font-medium">{currentUser?.measurements?.height || "Not set"}</p>
+                    </div>
+                  </div>
+                </Card>
+                <Button className="w-full" onClick={() => setAgencyApplyStep(2)}>Continue</Button>
+              </>
+            )}
+
+            {/* Step 2: Cover Note */}
+            {agencyApplyStep === 2 && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Tell {user.name} why you'd be a great fit for their roster.
+                </p>
+                <textarea
+                  value={agencyApplyNote}
+                  onChange={(e) => setAgencyApplyNote(e.target.value)}
+                  placeholder="I'm passionate about high fashion and believe your agency aligns perfectly with my career goals..."
+                  className="w-full min-h-[120px] rounded-xl border border-border bg-transparent p-3 text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setAgencyApplyStep(1)}>Back</Button>
+                  <Button className="flex-1" onClick={() => setAgencyApplyStep(3)}>Continue</Button>
+                </div>
+              </>
+            )}
+
+            {/* Step 3: Summary + Submit */}
+            {agencyApplyStep === 3 && (
+              <>
+                <Card className="p-4">
+                  <h4 className="font-medium text-sm mb-2">Application Summary</h4>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <p>📋 Profile info included</p>
+                    <p>🖼 {currentUser?.portfolio?.length || 0} portfolio photos</p>
+                    {agencyApplyNote.trim() && <p>💬 Cover letter included</p>}
+                  </div>
+                </Card>
+
+                <p className="text-sm text-muted-foreground">
+                  Applying to <span className="font-medium text-foreground">{user.name}</span>
+                </p>
+
+                {agencyApplyError && (
+                  <p className="text-sm text-red-500 text-center">{agencyApplyError}</p>
+                )}
+
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setAgencyApplyStep(2)}>Back</Button>
+                  <Button
+                    className="flex-1"
+                    disabled={agencyApplyLoading}
+                    onClick={async () => {
+                      setAgencyApplyLoading(true)
+                      setAgencyApplyError(null)
+                      const res = await api.applyToAgency(user.id, agencyApplyNote.trim() || undefined)
+                      setAgencyApplyLoading(false)
+                      if (res.error) {
+                        setAgencyApplyError(res.error)
+                        return
+                      }
+                      setShowAgencyApplySheet(false)
+                      setHasAppliedToAgency(true)
+                    }}
+                  >
+                    {agencyApplyLoading ? "Submitting…" : "Submit Application"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

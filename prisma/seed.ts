@@ -90,6 +90,8 @@ async function main() {
         passwordHash: hash,
         displayName: b.name,
         role: Role.BRAND,
+        isDemo: true,
+        authProvider: "demo",
         profile: { create: { displayName: b.name, bio: b.bio, location: b.location, verificationStatus: "LUXLANE_VERIFIED" } },
         brandProfile: { create: { brandName: b.name, website: b.website, verified: true } },
         settings: { create: { darkMode: true } },
@@ -122,6 +124,8 @@ async function main() {
         passwordHash: hash,
         displayName: a.name,
         role: Role.AGENCY,
+        isDemo: true,
+        authProvider: "demo",
         profile: { create: { displayName: a.name, bio: a.bio, location: a.location, verificationStatus: "LUXLANE_VERIFIED" } },
         agencyProfile: { create: { agencyName: a.name, website: a.website, verified: true, commissionRate: 20.0 } },
         settings: { create: { darkMode: true } },
@@ -131,18 +135,18 @@ async function main() {
     console.log(`  Agency: ${a.name} (${a.email})`)
   }
 
-  // ── MODELS (10) ──
+  // ── MODELS (10) — all independent, no agency assignments ──
   const modelData = [
-    { ...TEST_ACCOUNTS.models[0], bio: "International runway model. Paris, Milan, NYC.", location: "Paris, France", heightCm: 180, bustCm: 81, waistCm: 61, hipsCm: 86, hair: "Brunette", eyes: "Green", shoe: "40 EU", agencyIdx: 0, score: 94, exp: ["Dior SS24", "Chanel Resort", "Prada FW23"] },
-    { ...TEST_ACCOUNTS.models[1], bio: "Shanghai-born, London-based. Editorial and high fashion.", location: "London, UK", heightCm: 178, bustCm: 80, waistCm: 60, hipsCm: 87, hair: "Black", eyes: "Brown", shoe: "39 EU", agencyIdx: 1, score: 88, exp: ["Valentino", "Bottega Veneta", "Vogue China Cover"] },
-    { ...TEST_ACCOUNTS.models[2], bio: "Aspiring model. NYC based. Open to collaborations.", location: "Brooklyn, NY", heightCm: 175, bustCm: 81, waistCm: 64, hipsCm: 89, hair: "Blonde", eyes: "Blue", shoe: "38 EU", agencyIdx: 2, score: 42, exp: [] },
-    { ...TEST_ACCOUNTS.models[3], bio: "Scandinavian beauty. Stockholm & Paris.", location: "Stockholm, Sweden", heightCm: 177, bustCm: 83, waistCm: 62, hipsCm: 90, hair: "Blonde", eyes: "Blue", shoe: "39 EU", agencyIdx: 0, score: 78, exp: ["H&M Global", "COS Campaign"] },
-    { ...TEST_ACCOUNTS.models[4], bio: "Milan Fashion Week regular. Gucci, Prada, Versace.", location: "Milan, Italy", heightCm: 178, bustCm: 84, waistCm: 61, hipsCm: 89, hair: "Black", eyes: "Brown", shoe: "39 EU", agencyIdx: 1, score: 87, exp: ["Gucci FW24", "Prada SS24", "Versace Resort"] },
-    { ...TEST_ACCOUNTS.models[5], bio: "Parisian chic. Commercial and editorial.", location: "Paris, France", heightCm: 176, bustCm: 82, waistCm: 62, hipsCm: 88, hair: "Auburn", eyes: "Hazel", shoe: "38 EU", agencyIdx: 2, score: 72, exp: ["L'Oréal Paris", "Dior Beauty"] },
-    { ...TEST_ACCOUNTS.models[6], bio: "Top model. Specializing in haute couture and runway.", location: "Moscow, Russia", heightCm: 182, bustCm: 80, waistCm: 59, hipsCm: 87, hair: "Blonde", eyes: "Blue", shoe: "41 EU", agencyIdx: 3, score: 98, exp: ["Chanel Couture", "Louis Vuitton", "Balenciaga"] },
-    { ...TEST_ACCOUNTS.models[7], bio: "French model. Runway and beauty.", location: "Lyon, France", heightCm: 179, bustCm: 81, waistCm: 60, hipsCm: 87, hair: "Brown", eyes: "Green", shoe: "39 EU", agencyIdx: 4, score: 75, exp: ["YSL", "Celine"] },
-    { ...TEST_ACCOUNTS.models[8], bio: "Nigerian-British model. London & Lagos.", location: "London, UK", heightCm: 181, bustCm: 82, waistCm: 60, hipsCm: 88, hair: "Black", eyes: "Brown", shoe: "40 EU", agencyIdx: 5, score: 91, exp: ["Burberry AW24", "Alexander McQueen"] },
-    { ...TEST_ACCOUNTS.models[9], bio: "Korean-American. Fashion and commercial.", location: "Seoul, South Korea", heightCm: 174, bustCm: 80, waistCm: 61, hipsCm: 86, hair: "Black", eyes: "Brown", shoe: "37 EU", agencyIdx: 6, score: 69, exp: ["Samsung", "Gentle Monster"] },
+    { ...TEST_ACCOUNTS.models[0], bio: "International runway model. Paris, Milan, NYC.", location: "Paris, France", heightCm: 180, bustCm: 81, waistCm: 61, hipsCm: 86, hair: "Brunette", eyes: "Green", shoe: "40 EU", score: 94, exp: ["Dior SS24", "Chanel Resort", "Prada FW23"] },
+    { ...TEST_ACCOUNTS.models[1], bio: "Shanghai-born, London-based. Editorial and high fashion.", location: "London, UK", heightCm: 178, bustCm: 80, waistCm: 60, hipsCm: 87, hair: "Black", eyes: "Brown", shoe: "39 EU", score: 88, exp: ["Valentino", "Bottega Veneta", "Vogue China Cover"] },
+    { ...TEST_ACCOUNTS.models[2], bio: "Aspiring model. NYC based. Open to collaborations.", location: "Brooklyn, NY", heightCm: 175, bustCm: 81, waistCm: 64, hipsCm: 89, hair: "Blonde", eyes: "Blue", shoe: "38 EU", score: 42, exp: [] },
+    { ...TEST_ACCOUNTS.models[3], bio: "Scandinavian beauty. Stockholm & Paris.", location: "Stockholm, Sweden", heightCm: 177, bustCm: 83, waistCm: 62, hipsCm: 90, hair: "Blonde", eyes: "Blue", shoe: "39 EU", score: 78, exp: ["H&M Global", "COS Campaign"] },
+    { ...TEST_ACCOUNTS.models[4], bio: "Milan Fashion Week regular. Gucci, Prada, Versace.", location: "Milan, Italy", heightCm: 178, bustCm: 84, waistCm: 61, hipsCm: 89, hair: "Black", eyes: "Brown", shoe: "39 EU", score: 87, exp: ["Gucci FW24", "Prada SS24", "Versace Resort"] },
+    { ...TEST_ACCOUNTS.models[5], bio: "Parisian chic. Commercial and editorial.", location: "Paris, France", heightCm: 176, bustCm: 82, waistCm: 62, hipsCm: 88, hair: "Auburn", eyes: "Hazel", shoe: "38 EU", score: 72, exp: ["L'Oréal Paris", "Dior Beauty"] },
+    { ...TEST_ACCOUNTS.models[6], bio: "Top model. Specializing in haute couture and runway.", location: "Moscow, Russia", heightCm: 182, bustCm: 80, waistCm: 59, hipsCm: 87, hair: "Blonde", eyes: "Blue", shoe: "41 EU", score: 98, exp: ["Chanel Couture", "Louis Vuitton", "Balenciaga"] },
+    { ...TEST_ACCOUNTS.models[7], bio: "French model. Runway and beauty.", location: "Lyon, France", heightCm: 179, bustCm: 81, waistCm: 60, hipsCm: 87, hair: "Brown", eyes: "Green", shoe: "39 EU", score: 75, exp: ["YSL", "Celine"] },
+    { ...TEST_ACCOUNTS.models[8], bio: "Nigerian-British model. London & Lagos.", location: "London, UK", heightCm: 181, bustCm: 82, waistCm: 60, hipsCm: 88, hair: "Black", eyes: "Brown", shoe: "40 EU", score: 91, exp: ["Burberry AW24", "Alexander McQueen"] },
+    { ...TEST_ACCOUNTS.models[9], bio: "Korean-American. Fashion and commercial.", location: "Seoul, South Korea", heightCm: 174, bustCm: 80, waistCm: 61, hipsCm: 86, hair: "Black", eyes: "Brown", shoe: "37 EU", score: 69, exp: ["Samsung", "Gentle Monster"] },
   ]
 
   const models: string[] = []
@@ -154,6 +158,8 @@ async function main() {
         passwordHash: hash,
         displayName: m.name,
         role: Role.MODEL,
+        isDemo: true,
+        authProvider: "demo",
         profile: {
           create: {
             displayName: m.name,
@@ -177,7 +183,6 @@ async function main() {
             hair: m.hair,
             eyes: m.eyes,
             languages: ["English"],
-            agencyId: agencies[m.agencyIdx],
             verificationLevel: m.score > 70 ? "LUXLANE_VERIFIED" : m.score > 40 ? "AGENCY_VERIFIED" : "UNVERIFIED",
             luxlaneScore: m.score,
           },
@@ -186,7 +191,7 @@ async function main() {
       },
     })
     models.push(user.id)
-    console.log(`  Model: ${m.name} (${m.email}) → Agency: ${agencyData[m.agencyIdx].name}`)
+    console.log(`  Model: ${m.name} (${m.email}) — independent`)
   }
 
   // ── CLIENTS (10) ──
@@ -212,6 +217,8 @@ async function main() {
         passwordHash: hash,
         displayName: c.name,
         role: Role.CLIENT,
+        isDemo: true,
+        authProvider: "demo",
         profile: { create: { displayName: c.name, bio: c.bio, location: c.location, verificationStatus: "AGENCY_VERIFIED" } },
         clientProfile: { create: { clientName: c.name, industry: c.industry } },
         settings: { create: { darkMode: true } },
@@ -292,128 +299,24 @@ async function main() {
     console.log(`  Casting: ${c.title}`)
   }
 
-  // ── SUBMISSIONS ──
-  console.log("Creating submissions...")
-  const submissionDefs: { castingIdx: number; modelIdx: number; status: string }[] = [
-    { castingIdx: 0, modelIdx: 0, status: "SHORTLISTED" },
-    { castingIdx: 0, modelIdx: 1, status: "APPLIED" },
-    { castingIdx: 0, modelIdx: 4, status: "APPLIED" },
-    { castingIdx: 0, modelIdx: 6, status: "SHORTLISTED" },
-    { castingIdx: 1, modelIdx: 0, status: "APPLIED" },
-    { castingIdx: 1, modelIdx: 4, status: "SHORTLISTED" },
-    { castingIdx: 1, modelIdx: 6, status: "APPLIED" },
-    { castingIdx: 2, modelIdx: 3, status: "ACCEPTED" },
-    { castingIdx: 2, modelIdx: 5, status: "APPLIED" },
-    { castingIdx: 3, modelIdx: 0, status: "APPLIED" },
-    { castingIdx: 3, modelIdx: 1, status: "APPLIED" },
-    { castingIdx: 3, modelIdx: 8, status: "SHORTLISTED" },
-    { castingIdx: 4, modelIdx: 2, status: "APPLIED" },
-    { castingIdx: 5, modelIdx: 4, status: "APPLIED" },
-    { castingIdx: 5, modelIdx: 3, status: "SHORTLISTED" },
-    { castingIdx: 6, modelIdx: 2, status: "APPLIED" },
-    { castingIdx: 6, modelIdx: 9, status: "APPLIED" },
-    { castingIdx: 7, modelIdx: 8, status: "APPLIED" },
-    { castingIdx: 7, modelIdx: 1, status: "SHORTLISTED" },
-  ]
-
-  for (const s of submissionDefs) {
-    await prisma.submission.create({
-      data: {
-        castingId: castings[s.castingIdx],
-        modelId: models[s.modelIdx],
-        submittedBy: models[s.modelIdx],
-        status: s.status as any,
-        note: s.status === "APPLIED" ? "I'm very interested in this opportunity!" : undefined,
-      },
-    })
-  }
-
-  // ── CONVERSATIONS & MESSAGES ──
-  console.log("Creating conversations...")
-  // Dior ↔ Sofia
-  const conv1 = await prisma.conversation.create({
-    data: {
-      type: "direct",
-      members: { create: [{ userId: brands[0] }, { userId: models[0] }] },
-    },
-  })
-  await prisma.message.create({ data: { conversationId: conv1.id, senderId: brands[0], body: "Hi Sofia, we loved your portfolio. Would you be available for a fitting next week?" } })
-  await prisma.message.create({ data: { conversationId: conv1.id, senderId: models[0], body: "Thank you! Yes, I'm available. What day works best?" } })
-  await prisma.message.create({ data: { conversationId: conv1.id, senderId: brands[0], body: "Tuesday at 10am at our Paris atelier. I'll send the address." } })
-
-  // Elite ↔ Sofia
-  const conv2 = await prisma.conversation.create({
-    data: {
-      type: "direct",
-      members: { create: [{ userId: agencies[0] }, { userId: models[0] }] },
-    },
-  })
-  await prisma.message.create({ data: { conversationId: conv2.id, senderId: agencies[0], body: "Sofia, we have a great opportunity with Dior. Are you interested?" } })
-  await prisma.message.create({ data: { conversationId: conv2.id, senderId: models[0], body: "Absolutely! I'd love to hear more details." } })
-
-  // Gucci ↔ Chiara
-  const conv3 = await prisma.conversation.create({
-    data: {
-      type: "direct",
-      members: { create: [{ userId: brands[1] }, { userId: models[4] }] },
-    },
-  })
-  await prisma.message.create({ data: { conversationId: conv3.id, senderId: brands[1], body: "Ciao Chiara! We'd love to have you for Milan Fashion Week." } })
+  // No pre-made submissions — all applications are user-generated
 
   // ── POSTS ──
   console.log("Creating posts...")
   await prisma.post.create({
-    data: {
-      userId: models[0],
-      imageUrl: "/placeholder.svg?height=600&width=400&text=Behind+the+scenes",
-      caption: "Behind the scenes from yesterday's Dior shoot. Thank you to the incredible team.",
-    },
+    data: { userId: brands[0], imageUrl: "/placeholder.svg?height=600&width=400&text=Dior+SS25", caption: "Introducing our Spring 2025 collection. Now casting." },
   })
   await prisma.post.create({
-    data: {
-      userId: brands[0],
-      imageUrl: "/placeholder.svg?height=600&width=400&text=Dior+SS25",
-      caption: "Introducing our Spring 2025 collection. Now casting.",
-    },
+    data: { userId: agencies[0], imageUrl: "/placeholder.svg?height=600&width=400&text=Elite+New+Faces", caption: "Applications for Elite New Faces 2025 are now open! Link in bio." },
   })
   await prisma.post.create({
-    data: {
-      userId: models[4],
-      imageUrl: "/placeholder.svg?height=600&width=400&text=MFW+Runway",
-      caption: "Milan Fashion Week was a dream. Grateful for every moment on the runway.",
-    },
-  })
-  await prisma.post.create({
-    data: {
-      userId: agencies[0],
-      imageUrl: "/placeholder.svg?height=600&width=400&text=Elite+New+Faces",
-      caption: "Applications for Elite New Faces 2025 are now open! Link in bio.",
-    },
-  })
-  await prisma.post.create({
-    data: {
-      userId: models[6],
-      imageUrl: "/placeholder.svg?height=600&width=400&text=Couture+Week",
-      caption: "Paris Couture Week. Chanel and Valentino shows done!",
-    },
-  })
-
-  // ── NOTIFICATIONS ──
-  console.log("Creating notifications...")
-  await prisma.notification.create({
-    data: { userId: models[0], type: "SHORTLISTED", payload: { castingTitle: "Dior Spring 2025 Campaign", castingId: castings[0] } },
-  })
-  await prisma.notification.create({
-    data: { userId: models[6], type: "SHORTLISTED", payload: { castingTitle: "Dior Spring 2025 Campaign", castingId: castings[0] } },
-  })
-  await prisma.notification.create({
-    data: { userId: models[3], type: "CONFIRMED", payload: { castingTitle: "Chanel Haute Couture Fitting", castingId: castings[2] } },
+    data: { userId: brands[1], imageUrl: "/placeholder.svg?height=600&width=400&text=Gucci+MFW", caption: "Milan Fashion Week is calling. Are you ready?" },
   })
 
   console.log("\n✅ Seed complete!")
   console.log(`   ${brands.length} brands, ${agencies.length} agencies, ${models.length} models, ${clients.length} clients`)
-  console.log(`   ${castings.length} castings, ${submissionDefs.length} submissions`)
-  console.log(`   3 conversations with messages, 5 posts, 3 notifications`)
+  console.log(`   ${castings.length} castings, 0 submissions, 3 posts`)
+  console.log(`   All models are independent — no agency assignments`)
   console.log(`\n   Login: any email above + password "${TEST_PASSWORD}"`)
   console.log(`   Example: sofia@luxlane.demo / ${TEST_PASSWORD}`)
 }

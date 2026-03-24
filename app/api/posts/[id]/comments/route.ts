@@ -64,6 +64,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       include: { user: { include: { profile: true } } },
     })
 
+    // Notify post owner (skip if commenting on own post)
+    if (post.userId !== user.id) {
+      await prisma.notification.create({
+        data: {
+          userId: post.userId,
+          type: "SYSTEM",
+          payload: {
+            title: "New comment",
+            message: `${user.displayName || user.username} commented on your post`,
+            postId,
+          },
+        },
+      }).catch(() => {})
+    }
+
     return NextResponse.json({
       comment: {
         id: comment.id,

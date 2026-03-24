@@ -266,13 +266,57 @@ export const api = {
     return handleResponse(response)
   },
 
+  // Search
+  async search(query: string, type?: string) {
+    const params = new URLSearchParams({ q: query })
+    if (type) params.set("type", type)
+    const response = await fetch(`${API_BASE}/api/search?${params}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  // Password reset
+  async resetPassword(email: string, newPassword?: string) {
+    const response = await fetch(`${API_BASE}/api/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, newPassword }),
+    })
+    return handleResponse(response)
+  },
+
+  // Follow suggestions
+  async getFollowSuggestions() {
+    const response = await fetch(`${API_BASE}/api/users/suggestions`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  // Hashtags
+  async getHashtags(query?: string) {
+    const params = new URLSearchParams()
+    if (query) params.set("q", query)
+    const response = await fetch(`${API_BASE}/api/hashtags?${params}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
   // Posts (feed)
-  async getPosts(params?: { limit?: number; cursor?: string }) {
+  async getPosts(params?: { limit?: number; cursor?: string; feed?: string }) {
     const searchParams = new URLSearchParams()
     if (params?.limit) searchParams.set("limit", String(params.limit))
     if (params?.cursor) searchParams.set("cursor", params.cursor)
+    if (params?.feed) searchParams.set("feed", params.feed)
     const url = `${API_BASE}/api/posts${searchParams.toString() ? `?${searchParams}` : ""}`
     const response = await fetch(url, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async deletePost(postId: string) {
+    const response = await fetch(`${API_BASE}/api/posts/${postId}`, { method: "DELETE", credentials: "include" })
+    return handleResponse(response)
+  },
+
+  async getSavedPosts() {
+    const response = await fetch(`${API_BASE}/api/posts/saved`, { credentials: "include" })
     return handleResponse(response)
   },
 
@@ -944,6 +988,16 @@ export const api = {
       credentials: "include",
       body: JSON.stringify({ status }),
     })
+    return handleResponse(response)
+  },
+
+  async getModels(params?: { unsigned?: boolean; query?: string; limit?: number }) {
+    const searchParams = new URLSearchParams()
+    if (params?.unsigned) searchParams.set("unsigned", "true")
+    if (params?.query) searchParams.set("query", params.query)
+    if (params?.limit) searchParams.set("limit", String(params.limit))
+    const qs = searchParams.toString()
+    const response = await fetch(`${API_BASE}/api/models${qs ? `?${qs}` : ""}`, { credentials: "include" })
     return handleResponse(response)
   },
 }
