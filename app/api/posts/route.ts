@@ -8,8 +8,22 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const limit = Math.min(Number(searchParams.get("limit")) || 20, 50)
     const cursor = searchParams.get("cursor")
+    const feed = searchParams.get("feed") // "following" or null (all)
+
+    // Build where clause — filter by followed users if feed=following
+    let where: Record<string, unknown> = {}
+    if (feed === "following" && currentUser) {
+      const follows = await prisma.follow.findMany({
+        where: { followerId: currentUser.id },
+        select: { followingId: true },
+      })
+      const followedIds = follows.map((f: { followingId: string }) => f.followingId)
+      // Include own posts + followed users
+      where = { userId: { in: [currentUser.id, ...followedIds] } }
+    }
 
     const posts = await prisma.post.findMany({
+      where,
       take: limit + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
       orderBy: { createdAt: "desc" },

@@ -21,6 +21,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       update: {},
     })
 
+    // Send notification to post owner (skip if liking own post)
+    if (post.userId !== user.id) {
+      await prisma.notification.create({
+        data: {
+          userId: post.userId,
+          type: "SYSTEM",
+          payload: {
+            title: "New like",
+            message: `${user.displayName || user.username} liked your post`,
+            postId,
+          },
+        },
+      }).catch(() => {}) // Don't fail the like if notification fails
+    }
+
     const count = await prisma.postLike.count({ where: { postId } })
     return NextResponse.json({ liked: true, likes: count })
   } catch (error) {

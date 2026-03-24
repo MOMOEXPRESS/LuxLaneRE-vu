@@ -30,6 +30,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       update: {},
     })
 
+    // Notify the user being followed
+    await prisma.notification.create({
+      data: {
+        userId: followingId,
+        type: "SYSTEM",
+        payload: {
+          title: "New follower",
+          message: `${user.displayName || user.username} started following you`,
+          followerId: user.id,
+        },
+      },
+    }).catch(() => {})
+
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Follow error:", error)
