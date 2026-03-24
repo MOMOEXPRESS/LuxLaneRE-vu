@@ -13,12 +13,14 @@ import {
   UserPlus,
   BadgeCheck,
   Send,
-  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Trash2,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { formatDistanceToNow } from "date-fns"
 import { api } from "@/lib/api-client"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface SwipePost {
   id: string
@@ -55,65 +57,49 @@ interface CommentItem {
 
 export function SwipeFeed({ posts, isLoading, onUserClick, onLike, onSave, refreshFeed }: SwipeFeedProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const touchStartY = useRef(0)
+  const [direction, setDirection] = useState(0) // -1 left, 1 right
+  const touchStartX = useRef(0)
   const touchStartTime = useRef(0)
 
-  const goToPost = useCallback((index: number) => {
+  const goToPost = useCallback((index: number, dir: number) => {
     if (index >= 0 && index < posts.length) {
+      setDirection(dir)
       setCurrentIndex(index)
     }
   }, [posts.length])
 
-  // Touch handling for swipe
+  // Touch handling for horizontal swipe
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY
+    touchStartX.current = e.touches[0].clientX
     touchStartTime.current = Date.now()
   }, [])
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    const deltaY = touchStartY.current - e.changedTouches[0].clientY
+    const deltaX = touchStartX.current - e.changedTouches[0].clientX
     const deltaTime = Date.now() - touchStartTime.current
-    const velocity = Math.abs(deltaY) / deltaTime
+    const velocity = Math.abs(deltaX) / deltaTime
 
     // Swipe threshold: 50px or fast flick
-    if (deltaY > 50 || (deltaY > 20 && velocity > 0.3)) {
-      goToPost(currentIndex + 1) // swipe up → next
-    } else if (deltaY < -50 || (deltaY < -20 && velocity > 0.3)) {
-      goToPost(currentIndex - 1) // swipe down → previous
+    if (deltaX > 50 || (deltaX > 20 && velocity > 0.3)) {
+      goToPost(currentIndex + 1, 1) // swipe left → next
+    } else if (deltaX < -50 || (deltaX < -20 && velocity > 0.3)) {
+      goToPost(currentIndex - 1, -1) // swipe right → previous
     }
   }, [currentIndex, goToPost])
 
   // Keyboard navigation
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown" || e.key === "j") goToPost(currentIndex + 1)
-      if (e.key === "ArrowUp" || e.key === "k") goToPost(currentIndex - 1)
+      if (e.key === "ArrowRight" || e.key === "l") goToPost(currentIndex + 1, 1)
+      if (e.key === "ArrowLeft" || e.key === "h") goToPost(currentIndex - 1, -1)
     }
     window.addEventListener("keydown", handleKey)
     return () => window.removeEventListener("keydown", handleKey)
   }, [currentIndex, goToPost])
 
-  // Mouse wheel
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    let wheelTimeout: NodeJS.Timeout
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault()
-      clearTimeout(wheelTimeout)
-      wheelTimeout = setTimeout(() => {
-        if (e.deltaY > 30) goToPost(currentIndex + 1)
-        else if (e.deltaY < -30) goToPost(currentIndex - 1)
-      }, 50)
-    }
-    el.addEventListener("wheel", handleWheel, { passive: false })
-    return () => el.removeEventListener("wheel", handleWheel)
-  }, [currentIndex, goToPost])
-
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-10rem)] text-muted-foreground">
+      <div className="flex items-center justify-center h-[calc(100vh-12rem)] text-muted-foreground">
         Loading…
       </div>
     )
@@ -121,8 +107,7 @@ export function SwipeFeed({ posts, isLoading, onUserClick, onLike, onSave, refre
 
   if (posts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-10rem)] text-muted-foreground gap-3 px-8">
-        <ChevronUp className="w-8 h-8 opacity-30" />
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-12rem)] text-muted-foreground gap-3 px-8">
         <p className="text-center">No posts yet. Follow people or explore to see content here.</p>
       </div>
     )
@@ -131,33 +116,72 @@ export function SwipeFeed({ posts, isLoading, onUserClick, onLike, onSave, refre
   const post = posts[currentIndex]
   if (!post) return null
 
+  const variants = {
+    enter: (dir: number) => ({ x: dir > 0 ? "100%" : "-100%", opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (dir: number) => ({ x: dir > 0 ? "-100%" : "100%", opacity: 0 }),
+  }
+
   return (
     <div
-      ref={containerRef}
-      className="relative h-[calc(100vh-10rem)] overflow-hidden bg-black"
+      className="relative overflow-hidden bg-black"
+      style={{ height: "calc(100vh - 12rem)" }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <PostCard
-        key={post.id}
-        post={post}
-        onUserClick={() => onUserClick(post.user.username)}
-        onLike={() => onLike(post.id, post.likedByMe ?? false)}
-        onSave={() => onSave(post.id, post.savedByMe ?? false)}
-        refreshFeed={refreshFeed}
-        isFirst={currentIndex === 0}
-        isLast={currentIndex === posts.length - 1}
-        index={currentIndex}
-        total={posts.length}
-      />
+      <AnimatePresence initial={false} custom={direction} mode="popLayout">
+        <motion.div
+          key={post.id}
+          custom={direction}
+          variants={variants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="absolute inset-0"
+        >
+          <PostCard
+            post={post}
+            onUserClick={() => onUserClick(post.user.username)}
+            onLike={() => onLike(post.id, post.likedByMe ?? false)}
+            onSave={() => onSave(post.id, post.savedByMe ?? false)}
+            refreshFeed={refreshFeed}
+            index={currentIndex}
+            total={posts.length}
+          />
+        </motion.div>
+      </AnimatePresence>
 
-      {/* Swipe hint */}
-      {currentIndex === 0 && posts.length > 1 && (
-        <div className="absolute bottom-4 left-0 right-0 flex justify-center animate-bounce">
-          <p className="text-white/40 text-xs flex items-center gap-1">
-            <ChevronUp className="w-3 h-3 rotate-180" />
-            Swipe up for more
-          </p>
+      {/* Navigation arrows (desktop) */}
+      {currentIndex > 0 && (
+        <button
+          onClick={() => goToPost(currentIndex - 1, -1)}
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-black/60 transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+      )}
+      {currentIndex < posts.length - 1 && (
+        <button
+          onClick={() => goToPost(currentIndex + 1, 1)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-black/60 transition-colors"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      )}
+
+      {/* Dot indicators at bottom */}
+      {posts.length > 1 && (
+        <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-10">
+          {posts.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => goToPost(i, i > currentIndex ? 1 : -1)}
+              className={`w-1.5 h-1.5 rounded-full transition-all ${
+                i === currentIndex ? "bg-white w-4" : "bg-white/40"
+              }`}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -178,8 +202,6 @@ function PostCard({
   onLike: () => void
   onSave: () => void
   refreshFeed: () => void
-  isFirst: boolean
-  isLast: boolean
   index: number
   total: number
 }) {
@@ -228,7 +250,6 @@ function PostCard({
 
   const handleFollow = async () => {
     setIsFollowing(true)
-    // Would need userId lookup — for now just toggle visually
   }
 
   const handleSendComment = async () => {
@@ -258,25 +279,17 @@ function PostCard({
         className="w-full h-full object-cover"
       />
 
-      {/* Gradient overlays for readability */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 pointer-events-none" />
-
-      {/* Top bar — post counter */}
-      <div className="absolute top-3 left-0 right-0 flex justify-center">
-        <span className="text-white/50 text-xs font-medium">
-          {index + 1} / {total}
-        </span>
-      </div>
+      {/* Gradient overlays */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 pointer-events-none" />
 
       {/* Right side — action buttons (TikTok style) */}
-      <div className="absolute right-3 bottom-32 flex flex-col items-center gap-5">
-        {/* Profile pic */}
+      <div className="absolute right-3 bottom-24 flex flex-col items-center gap-5">
+        {/* Profile pic with follow button */}
         <button onClick={onUserClick} className="relative">
           <Avatar className="w-11 h-11 ring-2 ring-white">
             <AvatarImage src={post.user.avatar || "/placeholder.svg"} alt={post.user.name} />
-            <AvatarFallback className="text-xs">{post.user.name[0]}</AvatarFallback>
+            <AvatarFallback className="text-xs">{post.user.name?.[0]}</AvatarFallback>
           </Avatar>
-          {/* Follow button overlay */}
           {!isOwnPost && !isFollowing && (
             <button
               onClick={(e) => { e.stopPropagation(); handleFollow() }}
@@ -299,7 +312,7 @@ function PostCard({
           <span className="text-white text-[10px] font-medium">{post.comments > 0 ? post.comments : ""}</span>
         </button>
 
-        {/* Bookmark / Save */}
+        {/* Save + Like side by side at bottom */}
         <button onClick={handleSave} className="flex flex-col items-center gap-0.5">
           <Bookmark className={`w-7 h-7 ${saved ? "fill-white text-white" : "text-white"}`} />
         </button>
@@ -347,7 +360,7 @@ function PostCard({
                 <div key={c.id} className="flex gap-3">
                   <Avatar className="w-8 h-8 shrink-0">
                     <AvatarImage src={c.user.avatar || "/placeholder.svg"} alt={c.user.name} />
-                    <AvatarFallback>{c.user.name[0]}</AvatarFallback>
+                    <AvatarFallback>{c.user.name?.[0]}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm">
