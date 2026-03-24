@@ -285,6 +285,20 @@ export const api = {
     return handleResponse(response)
   },
 
+  // Follow suggestions
+  async getFollowSuggestions() {
+    const response = await fetch(`${API_BASE}/api/users/suggestions`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
+  // Hashtags
+  async getHashtags(query?: string) {
+    const params = new URLSearchParams()
+    if (query) params.set("q", query)
+    const response = await fetch(`${API_BASE}/api/hashtags?${params}`, { credentials: "include" })
+    return handleResponse(response)
+  },
+
   // Posts (feed)
   async getPosts(params?: { limit?: number; cursor?: string; feed?: string }) {
     const searchParams = new URLSearchParams()

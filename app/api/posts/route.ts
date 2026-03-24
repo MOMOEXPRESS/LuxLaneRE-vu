@@ -125,6 +125,32 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Extract @mentions from caption and send notifications
+    if (caption) {
+      const mentions = caption.match(/@([\w]+)/g)?.map((m: string) => m.slice(1)) || []
+      if (mentions.length > 0) {
+        const mentionedUsers = await prisma.user.findMany({
+          where: { username: { in: mentions } },
+          select: { id: true, username: true },
+        })
+        for (const mu of mentionedUsers) {
+          if (mu.id !== user.id) {
+            await prisma.notification.create({
+              data: {
+                userId: mu.id,
+                type: "SYSTEM",
+                payload: {
+                  title: "You were mentioned",
+                  message: `${user.displayName || user.username} mentioned you in a post`,
+                  postId: post.id,
+                },
+              },
+            }).catch(() => {})
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
       post: {
         id: post.id,
