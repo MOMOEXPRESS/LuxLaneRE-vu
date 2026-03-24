@@ -5,7 +5,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, BadgeCheck, Send } from "lucide-react"
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, BadgeCheck, Send, Trash2 } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
 import { formatDistanceToNow } from "date-fns"
 import { api } from "@/lib/api-client"
 
@@ -40,10 +41,26 @@ interface CommentItem {
 }
 
 export function FeedPost({ post, onUserClick, onLike, onSave, refreshFeed }: FeedPostProps) {
+  const { user: currentUser } = useAuth()
   const [liked, setLiked] = useState(post.likedByMe ?? false)
   const [saved, setSaved] = useState(post.savedByMe ?? false)
   const [likeCount, setLikeCount] = useState(post.likes)
   const [showCommentsSheet, setShowCommentsSheet] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+  const [deleted, setDeleted] = useState(false)
+
+  const isOwnPost = currentUser?.username === post.user.username
+
+  const handleDelete = async () => {
+    if (!confirm("Delete this post?")) return
+    const res = await api.deletePost(post.id)
+    if (!res.error) {
+      setDeleted(true)
+      refreshFeed?.()
+    }
+  }
+
+  if (deleted) return null
   const [comments, setComments] = useState<CommentItem[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [commentInput, setCommentInput] = useState("")
@@ -110,9 +127,29 @@ export function FeedPost({ post, onUserClick, onLike, onSave, refreshFeed }: Fee
             {post.user.verified && <BadgeCheck className="w-4 h-4 text-foreground" />}
           </div>
         </button>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreHorizontal className="w-5 h-5" />
-        </Button>
+        <div className="relative">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowMenu(!showMenu)}>
+            <MoreHorizontal className="w-5 h-5" />
+          </Button>
+          {showMenu && (
+            <div className="absolute right-0 top-8 z-50 bg-background border border-border rounded-lg shadow-lg py-1 min-w-[140px]">
+              {isOwnPost && (
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-muted"
+                  onClick={() => { setShowMenu(false); handleDelete() }}
+                >
+                  <Trash2 className="w-4 h-4" /> Delete post
+                </button>
+              )}
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+                onClick={() => setShowMenu(false)}
+              >
+                <Share2 className="w-4 h-4" /> Share
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Image */}

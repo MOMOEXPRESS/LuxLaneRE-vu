@@ -617,7 +617,7 @@ function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) =>
                   <Card key={app.id} className="p-3 flex items-center gap-3">
                     <Avatar className="w-10 h-10">
                       <AvatarImage src={app.modelAvatar ?? "/placeholder.svg"} />
-                      <AvatarFallback>{app.modelName[0]}</AvatarFallback>
+                      <AvatarFallback>{app.modelName?.[0] || "?"}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{app.modelName}</p>

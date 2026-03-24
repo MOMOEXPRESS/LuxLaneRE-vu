@@ -3,11 +3,12 @@
 import useSWR from "swr"
 import { api } from "@/lib/api-client"
 
-export function usePosts(params?: { limit?: number; cursor?: string }) {
-  const key = params?.cursor ? `posts?cursor=${params.cursor}` : "posts"
+export function usePosts(params?: { limit?: number; cursor?: string; feed?: string }) {
+  const feedParam = params?.feed || ""
+  const key = `posts?feed=${feedParam}&cursor=${params?.cursor || ""}`
   const { data, error, isLoading, mutate } = useSWR(
     key,
-    () => api.getPosts({ limit: params?.limit ?? 20, cursor: params?.cursor }).then((r) => r.data),
+    () => api.getPosts({ limit: params?.limit ?? 20, cursor: params?.cursor, feed: params?.feed }).then((r) => r.data as any),
     { revalidateOnFocus: true },
   )
 

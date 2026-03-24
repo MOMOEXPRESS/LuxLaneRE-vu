@@ -105,8 +105,8 @@ export async function POST(request: NextRequest) {
         userId: agencyId,
         type: "SYSTEM",
         payload: {
-          title: "New Application",
-          body: `A model has applied to join your roster`,
+          title: "New Roster Application",
+          message: `${user.displayName || user.username} has applied to join your roster`,
           relatedId: application.id,
           relatedType: "agency_application",
         },

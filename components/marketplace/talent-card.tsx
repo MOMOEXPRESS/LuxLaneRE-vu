@@ -67,11 +67,9 @@ export function TalentCard({ user, onClick }: TalentCardProps) {
         {/* Quick Stats */}
         {user.role === "model" && user.measurements && (
           <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-            <span>{user.measurements.height.split("/")[0].trim()}</span>
-            <span className="w-1 h-1 rounded-full bg-muted-foreground" />
-            <span>{user.measurements.hairColor}</span>
-            <span className="w-1 h-1 rounded-full bg-muted-foreground" />
-            <span>{user.measurements.eyeColor}</span>
+            {user.measurements.height && <span>{user.measurements.height.includes("/") ? user.measurements.height.split("/")[0].trim() : user.measurements.height}</span>}
+            {user.measurements.hairColor && <><span className="w-1 h-1 rounded-full bg-muted-foreground" /><span>{user.measurements.hairColor}</span></>}
+            {user.measurements.eyeColor && <><span className="w-1 h-1 rounded-full bg-muted-foreground" /><span>{user.measurements.eyeColor}</span></>}
           </div>
         )}
       </div>

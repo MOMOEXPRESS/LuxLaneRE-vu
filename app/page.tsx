@@ -1,10 +1,11 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { useEffect, useState, useCallback } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useState, useCallback, Suspense } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api-client"
 import { useNavigation } from "@/lib/navigation-context"
+import { useNotifications } from "@/lib/hooks/use-notifications"
 import type { User } from "@/lib/types"
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow"
 import { BottomNav } from "@/components/layout/bottom-nav"
@@ -46,25 +47,24 @@ export default function Home() {
     goBack,
   } = useNavigation()
 
-  const [unreadCount, setUnreadCount] = useState(0)
+  const { unreadCount } = useNotifications(true)
+  const [openConversationId, setOpenConversationId] = useState<string | null>(null)
 
+  // Read URL params for tab and conversation
   useEffect(() => {
     if (typeof window === "undefined") return
     const params = new URLSearchParams(window.location.search)
     if (params.get("tab") === "inbox") setActiveTab("inbox")
+    if (params.get("conv")) setOpenConversationId(params.get("conv"))
   }, [setActiveTab])
 
+  // Reset to home tab when user changes (login/logout)
   useEffect(() => {
-    if (!isAuthenticated) return
-    const fetchUnread = async () => {
-      const res = await api.getNotifications(true) // unread only
-      const data = res.data as { notifications?: Array<unknown> } | undefined
-      setUnreadCount(data?.notifications?.length || 0)
+    if (isAuthenticated && user) {
+      setActiveTab("home")
     }
-    fetchUnread()
-    const interval = setInterval(fetchUnread, 30000) // poll every 30s
-    return () => clearInterval(interval)
-  }, [isAuthenticated])
+  }, [user?.id])
+
   const isBrandOrAgency = user?.role === "brand" || user?.role === "agency"
 
   if (!isAuthenticated) {
@@ -245,7 +245,9 @@ export default function Home() {
           user={selectedProfile}
           isOwn={false}
           onMessageClick={async () => {
-            await api.startDirectConversation(selectedProfile.id)
+            const res = await api.startDirectConversation(selectedProfile.id)
+            const convData = res.data as { conversationId?: string } | undefined
+            if (convData?.conversationId) setOpenConversationId(convData.conversationId)
             navigateTo("main")
             setActiveTab("inbox")
           }}
@@ -279,7 +281,7 @@ export default function Home() {
       case "discover":
         return "Discover"
       case "models":
-        return "Models"
+        return user?.role === "agency" ? "Scout" : "Models"
       case "roster":
         return "My Models"
       case "inbox":
@@ -328,7 +330,7 @@ export default function Home() {
       case "roster":
         return <RosterView onViewProfile={viewProfile} />
       case "inbox":
-        return <InboxView onViewProfile={viewProfile} />
+        return <InboxView onViewProfile={viewProfile} initialConversationId={openConversationId} />
       default:
         return null
     }

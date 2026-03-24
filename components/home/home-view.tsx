@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ActiveCastings } from "./active-castings"
 import { FeedToggle } from "./feed-toggle"
-import { FeedPost } from "./feed-post"
+import { SwipeFeed } from "./swipe-feed"
 import { StoryBar } from "@/components/stories/story-bar"
 import { StoryViewer } from "@/components/stories/story-viewer"
 import { MyRankCard } from "@/components/scoreboard/my-rank-card"
@@ -29,8 +29,10 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
   const router = useRouter()
   const { user } = useAuth()
   const { castings } = useStore()
-  const { posts: apiPosts, isLoading: postsLoading, refresh: refreshPosts } = usePosts()
   const [feedType, setFeedType] = useState<"foryou" | "following">("foryou")
+  const { posts: apiPosts, isLoading: postsLoading, refresh: refreshPosts } = usePosts({
+    feed: feedType === "following" ? "following" : undefined,
+  })
 
   const feedPosts = apiPosts.map((p: { id: string; user: { name: string; username: string; avatar: string; verified: boolean }; imageUrl: string; caption: string | null; likes: number; comments: number; likedByMe: boolean; savedByMe: boolean; createdAt: string }) => ({
     id: p.id,
@@ -192,28 +194,18 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
         </div>
       )}
 
-      {/* Feed Toggle */}
+      {/* Feed Toggle — Explore / Following */}
       <FeedToggle active={feedType} onChange={setFeedType} />
 
-      {/* Feed Posts */}
-      <div>
-        {postsLoading ? (
-          <div className="py-12 text-center text-muted-foreground text-sm">Loading feed…</div>
-        ) : feedPosts.length > 0 ? (
-          feedPosts.map((post: any) => (
-            <FeedPost
-              key={post.id}
-              post={post}
-              onUserClick={() => handleUserClick(post.user.username)}
-              onLike={() => handleLike(post.id, post.likedByMe)}
-              onSave={() => handleSave(post.id, post.savedByMe)}
-              refreshFeed={refreshPosts}
-            />
-          ))
-        ) : (
-          <div className="py-12 text-center text-muted-foreground text-sm">No posts yet.</div>
-        )}
-      </div>
+      {/* TikTok-style Swipe Feed */}
+      <SwipeFeed
+        posts={feedPosts}
+        isLoading={postsLoading}
+        onUserClick={handleUserClick}
+        onLike={handleLike}
+        onSave={handleSave}
+        refreshFeed={refreshPosts}
+      />
     </div>
   )
 }

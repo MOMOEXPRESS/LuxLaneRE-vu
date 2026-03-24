@@ -9,6 +9,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
+    // Get blocked users to exclude from conversations
+    const blocks = await prisma.block.findMany({
+      where: { OR: [{ blockerId: user.id }, { blockedId: user.id }] },
+      select: { blockerId: true, blockedId: true },
+    })
+    const blockedIds = new Set(blocks.map((b: { blockerId: string; blockedId: string }) => b.blockerId === user.id ? b.blockedId : b.blockerId))
+
     const memberships = await prisma.conversationMember.findMany({
       where: { userId: user.id },
       include: { conversation: true },
@@ -59,7 +66,12 @@ export async function GET(request: NextRequest) {
       }),
     )
 
-    return NextResponse.json({ conversations: enrichedConversations })
+    // Filter out conversations with blocked users
+    const filtered = enrichedConversations.filter((conv) =>
+      !conv.members.some((m: { id: string }) => blockedIds.has(m.id))
+    )
+
+    return NextResponse.json({ conversations: filtered })
   } catch (error) {
     console.error("Get conversations error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

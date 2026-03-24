@@ -1,13 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { useStore } from "@/lib/store-context"
+import { api } from "@/lib/api-client"
 import type { User } from "@/lib/types"
 import {
   Search,
@@ -30,7 +30,6 @@ interface ModelsBrowseProps {
 }
 
 export function ModelsBrowse({ onViewProfile, onInviteToCasting, onMessage, onCompare }: ModelsBrowseProps) {
-  const { getUsers } = useStore()
   const [search, setSearch] = useState("")
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState({
@@ -44,8 +43,35 @@ export function ModelsBrowse({ onViewProfile, onInviteToCasting, onMessage, onCo
   })
   const [compareMode, setCompareMode] = useState(false)
   const [selectedForCompare, setSelectedForCompare] = useState<User[]>([])
+  const [models, setModels] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const models = getUsers().filter((u) => u.role === "model")
+  const fetchModels = useCallback(async () => {
+    setLoading(true)
+    const res = await api.getModels({ unsigned: true, limit: 50 })
+    const data = res.data as { models?: any[] } | undefined
+    if (data?.models) {
+      setModels(data.models.map((m: any) => ({
+        id: m.id,
+        name: m.displayName || m.username,
+        username: m.username,
+        email: "",
+        role: "model" as const,
+        avatar: m.avatarUrl || "/placeholder.svg",
+        verified: m.verified || false,
+        verificationLevel: m.verificationStatus?.toLowerCase()?.includes("luxlane") ? "luxlane_verified" as const : m.verificationStatus?.toLowerCase()?.includes("agency") ? "agency_verified" as const : "unverified" as const,
+        bio: m.bio || "",
+        location: m.location || "",
+        followers: 0,
+        following: 0,
+        createdAt: new Date(m.createdAt),
+        measurements: m.height ? { height: m.height, bust: m.bust, waist: m.waist, hips: m.hips, hairColor: m.hairColor, eyeColor: m.eyeColor, heightCm: parseInt(m.height) || 0 } : undefined,
+      })))
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchModels() }, [fetchModels])
 
   const filteredModels = models.filter((model) => {
     if (search) {

@@ -212,7 +212,8 @@ export default function PublicProfilePage() {
         onSettingsClick={() => router.push("/")}
         onMessageClick={async () => {
           const res = await api.startDirectConversation(profileUser.id)
-          router.push("/?tab=inbox")
+          const convData = res.data as { conversationId?: string } | undefined
+          router.push(`/?tab=inbox${convData?.conversationId ? `&conv=${convData.conversationId}` : ""}`)
         }}
         onFollowToggle={async () => {
           if (profileUser.isFollowing) {
