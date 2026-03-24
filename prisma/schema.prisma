@@ -134,6 +134,11 @@ model User {
   modelBookings       DirectBooking[]       @relation("modelBookings")
   modelAgenciesAsModel  ModelAgency[]       @relation("modelAgencyModel")
   modelAgenciesAsAgency ModelAgency[]       @relation("modelAgencyAgency")
+  workCredits           WorkCredit[]        @relation("modelCredits")
+  confirmedCredits      WorkCredit[]        @relation("confirmedCredits")
+  endorsementsReceived  Endorsement[]       @relation("endorsementsReceived")
+  endorsementsGiven     Endorsement[]       @relation("endorsementsGiven")
+  jobAlerts             JobAlert[]
 
   @@map("users")
 }
@@ -742,4 +747,57 @@ model DirectBooking {
   @@index([brandId])
   @@index([modelId])
   @@map("direct_bookings")
+}
+
+// ── Phase 5: Industry Features ──
+
+model WorkCredit {
+  id           String    @id @default(uuid())
+  modelId      String    @map("model_id")
+  brandName    String    @map("brand_name")
+  projectTitle String    @map("project_title")
+  role         String?
+  photographer String?
+  year         Int?
+  type         String    @default("campaign") // campaign, editorial, runway, commercial, video
+  confirmedBy  String?   @map("confirmed_by")
+  confirmedAt  DateTime? @map("confirmed_at")
+  imageUrl     String?   @map("image_url")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  model     User  @relation("modelCredits", fields: [modelId], references: [id], onDelete: Cascade)
+  confirmer User? @relation("confirmedCredits", fields: [confirmedBy], references: [id], onDelete: SetNull)
+
+  @@index([modelId])
+  @@map("work_credits")
+}
+
+model Endorsement {
+  id         String   @id @default(uuid())
+  modelId    String   @map("model_id")
+  endorserId String   @map("endorser_id")
+  text       String
+  tags       String[] @default([])
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  model    User @relation("endorsementsReceived", fields: [modelId], references: [id], onDelete: Cascade)
+  endorser User @relation("endorsementsGiven", fields: [endorserId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, endorserId])
+  @@index([modelId])
+  @@map("endorsements")
+}
+
+model JobAlert {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  criteria     Json      @default("{}")
+  active       Boolean   @default(true)
+  lastNotified DateTime? @map("last_notified")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("job_alerts")
 }
