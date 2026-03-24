@@ -88,6 +88,8 @@ model User {
   bio             String?
   locationCity    String?   @map("location_city")
   avatarUrl       String?   @map("avatar_url")
+  isDemo          Boolean   @default(false) @map("is_demo")
+  authProvider    String    @default("credentials") @map("auth_provider")
   onboardingComplete Boolean? @default(false) @map("onboarding_complete")
   createdAt       DateTime? @default(now()) @map("created_at")
   updatedAt       DateTime? @updatedAt @map("updated_at")
@@ -130,6 +132,8 @@ model User {
   highlights          StoryHighlight[]      @relation("userHighlights")
   brandBookings       DirectBooking[]       @relation("brandBookings")
   modelBookings       DirectBooking[]       @relation("modelBookings")
+  modelAgenciesAsModel  ModelAgency[]       @relation("modelAgencyModel")
+  modelAgenciesAsAgency ModelAgency[]       @relation("modelAgencyAgency")
 
   @@map("users")
 }
@@ -241,6 +245,24 @@ model AgencyApplication {
   @@unique([modelId, agencyId])
   @@index([agencyId, status])
   @@map("agency_applications")
+}
+
+model ModelAgency {
+  id             String    @id @default(uuid())
+  modelId        String    @map("model_id")
+  agencyId       String    @map("agency_id")
+  status         String    @default("PENDING") // PENDING, INVITED, APPROVED, WAITING_CONTRACT, ACTIVE, DECLINED
+  contractStatus String    @default("NONE") @map("contract_status") // NONE, PENDING, SIGNED, EXPIRED
+  joinedAt       DateTime? @map("joined_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  model  User @relation("modelAgencyModel", fields: [modelId], references: [id], onDelete: Cascade)
+  agency User @relation("modelAgencyAgency", fields: [agencyId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, agencyId])
+  @@index([agencyId, status])
+  @@map("model_agencies")
 }
 
 model AvailabilityDate {
@@ -498,7 +520,9 @@ model UserSettings {
 model Post {
   id        String   @id @default(uuid())
   userId    String
-  imageUrl  String
+  imageUrl  String           // Primary image (backward compat)
+  mediaUrls Json     @default("[]") @map("media_urls") // JSON array for carousel
+  mediaType String   @default("image") @map("media_type") // "image" | "video" | "carousel"
   caption   String?
   createdAt DateTime @default(now())
 
@@ -542,12 +566,16 @@ model Comment {
   postId    String
   userId    String
   body      String
+  parentId  String?  @map("parent_id")
   createdAt DateTime @default(now())
 
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies Comment[] @relation("CommentReplies")
 
   @@index([postId])
+  @@index([parentId])
   @@map("comments")
 }
 
