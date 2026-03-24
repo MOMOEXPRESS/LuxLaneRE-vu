@@ -285,20 +285,22 @@ function PostCard({
       {/* Right side — action buttons (TikTok style) */}
       <div className="absolute right-3 bottom-24 flex flex-col items-center gap-5">
         {/* Profile pic with follow button */}
-        <button onClick={onUserClick} className="relative">
-          <Avatar className="w-11 h-11 ring-2 ring-white">
-            <AvatarImage src={post.user.avatar || "/placeholder.svg"} alt={post.user.name} />
-            <AvatarFallback className="text-xs">{post.user.name?.[0]}</AvatarFallback>
-          </Avatar>
+        <div className="relative">
+          <div onClick={onUserClick} className="cursor-pointer">
+            <Avatar className="w-11 h-11 ring-2 ring-white">
+              <AvatarImage src={post.user.avatar || "/placeholder.svg"} alt={post.user.name} />
+              <AvatarFallback className="text-xs">{post.user.name?.[0]}</AvatarFallback>
+            </Avatar>
+          </div>
           {!isOwnPost && !isFollowing && (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleFollow() }}
-              className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center"
+            <div
+              onClick={handleFollow}
+              className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center cursor-pointer"
             >
               <UserPlus className="w-3 h-3 text-white" />
-            </button>
+            </div>
           )}
-        </button>
+        </div>
 
         {/* Like */}
         <button onClick={handleLike} className="flex flex-col items-center gap-0.5">
