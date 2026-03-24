@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
+import { useStore } from "@/lib/store-context"
 import { useConversations, useMessages } from "@/lib/hooks/use-conversations"
 import { useNotifications } from "@/lib/hooks/use-notifications"
 import { api } from "@/lib/api-client"
@@ -120,8 +121,13 @@ export function InboxView({ onViewProfile, initialConversationId }: InboxViewPro
     }
   }, [initialConversationId, conversations, selectedConversation])
 
+  // Fetch real bookings from store (loaded from DB)
+  const { getApplicationsForModel } = useStore()
+  const allApplications = user ? getApplicationsForModel(user.id) : []
+  const bookingApplications = allApplications.filter(
+    (a) => a.status === "accepted" || a.status === "shortlisted" || a.status === "offered" || a.status === "confirmed"
+  )
   const pendingOffers: JobOffer[] = []
-  const bookingApplications: CastingApplication[] = []
 
   if (selectedConversation) {
     return (

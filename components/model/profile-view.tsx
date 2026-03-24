@@ -844,16 +844,17 @@ export function ProfileView({
                 )}
 
                 {/* Agency */}
-                {user.agencyId && (
+                {user.agencyId && user.agencyName && (
                   <Card className="p-4">
                     <h3 className="font-semibold mb-3">Represented By</h3>
                     <div className="flex items-center gap-3">
                       <Avatar className="w-10 h-10">
-                        <AvatarFallback>AG</AvatarFallback>
+                        <AvatarImage src={user.agencyAvatar || "/placeholder.svg"} />
+                        <AvatarFallback>{user.agencyName?.[0] || "A"}</AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium">Elite Model Management</p>
-                        <p className="text-sm text-muted-foreground">New York</p>
+                        <p className="font-medium">{user.agencyName}</p>
+                        <p className="text-sm text-muted-foreground">{user.agencyLocation || "Agency"}</p>
                       </div>
                     </div>
                   </Card>

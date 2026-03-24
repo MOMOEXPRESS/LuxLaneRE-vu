@@ -12,14 +12,29 @@ export async function GET(request: NextRequest) {
 
     // Build where clause — filter by followed users if feed=following
     let where: Record<string, unknown> = {}
+
+    // Get blocked user IDs to exclude from feed
+    let blockedIds: string[] = []
+    if (currentUser) {
+      const blocks = await prisma.block.findMany({
+        where: { OR: [{ blockerId: currentUser.id }, { blockedId: currentUser.id }] },
+        select: { blockerId: true, blockedId: true },
+      })
+      blockedIds = blocks.map((b: { blockerId: string; blockedId: string }) =>
+        b.blockerId === currentUser.id ? b.blockedId : b.blockerId
+      )
+    }
+
     if (feed === "following" && currentUser) {
       const follows = await prisma.follow.findMany({
         where: { followerId: currentUser.id },
         select: { followingId: true },
       })
       const followedIds = follows.map((f: { followingId: string }) => f.followingId)
-      // Include own posts + followed users
-      where = { userId: { in: [currentUser.id, ...followedIds] } }
+      const allowedIds = [currentUser.id, ...followedIds].filter((id) => !blockedIds.includes(id))
+      where = { userId: { in: allowedIds } }
+    } else if (blockedIds.length > 0) {
+      where = { userId: { notIn: blockedIds } }
     }
 
     const posts = await prisma.post.findMany({

@@ -29,8 +29,10 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
   const router = useRouter()
   const { user } = useAuth()
   const { castings } = useStore()
-  const { posts: apiPosts, isLoading: postsLoading, refresh: refreshPosts } = usePosts()
   const [feedType, setFeedType] = useState<"foryou" | "following">("foryou")
+  const { posts: apiPosts, isLoading: postsLoading, refresh: refreshPosts } = usePosts({
+    feed: feedType === "following" ? "following" : undefined,
+  })
 
   const feedPosts = apiPosts.map((p: { id: string; user: { name: string; username: string; avatar: string; verified: boolean }; imageUrl: string; caption: string | null; likes: number; comments: number; likedByMe: boolean; savedByMe: boolean; createdAt: string }) => ({
     id: p.id,
