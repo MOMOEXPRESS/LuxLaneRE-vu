@@ -21,7 +21,6 @@ import { ProfileView } from "@/components/model/profile-view"
 import { SettingsView } from "@/components/settings/settings-view"
 import { ScoreboardView } from "@/components/scoreboard/scoreboard-view"
 import { VerificationFlow } from "@/components/verification/verification-flow"
-import { CreateTwinFlow } from "@/components/digital-twin/create-twin-flow"
 import { CompareView } from "@/components/compare/compare-view"
 import { CastingRoomView } from "@/components/casting-room/casting-room"
 import { BrandDashboard } from "@/components/brand/brand-dashboard"
@@ -76,11 +75,6 @@ export default function Home() {
     return <VerificationFlow onBack={() => navigateTo("settings")} onComplete={() => navigateTo("main")} />
   }
 
-  // Create Digital Twin flow - full screen
-  if (currentView === "create-twin") {
-    return <CreateTwinFlow onBack={() => navigateTo("settings")} onComplete={() => navigateTo("own-profile")} />
-  }
-
   // Scoreboard view - full screen with back
   if (currentView === "scoreboard") {
     return <ScoreboardView onBack={goBack} onViewProfile={viewProfile} />
@@ -115,7 +109,6 @@ export default function Home() {
       <SettingsView
         onBack={goBack}
         onOpenVerification={() => navigateTo("verification")}
-        onOpenDigitalTwin={() => navigateTo("create-twin")}
       />
     )
   }
@@ -330,7 +323,7 @@ export default function Home() {
       case "roster":
         return <RosterView onViewProfile={viewProfile} />
       case "inbox":
-        return <InboxView onViewProfile={viewProfile} initialConversationId={openConversationId} />
+        return <InboxView onViewProfile={viewProfile} initialConversationId={openConversationId} onConversationOpened={() => setOpenConversationId(null)} />
       default:
         return null
     }

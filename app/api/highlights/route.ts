@@ -6,10 +6,14 @@ import { getCurrentUser } from "@/lib/auth"
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get("userId")
+    let userId = searchParams.get("userId")
 
     if (!userId) {
-      return NextResponse.json({ error: "userId required" }, { status: 400 })
+      const user = await getCurrentUser()
+      if (!user) {
+        return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+      }
+      userId = user.id
     }
 
     const highlights = await prisma.storyHighlight.findMany({
