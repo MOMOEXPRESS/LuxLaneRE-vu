@@ -52,7 +52,6 @@ import {
 } from "lucide-react"
 import { uploadAvatar } from "@/lib/upload"
 import { mockUsers } from "@/lib/mock-data"
-import { DigitalTwinSection } from "@/components/digital-twin/digital-twin-section"
 
 type ProfileTab = "portfolio" | "posts" | "details" | "availability" | "analytics" | "earnings"
 
@@ -459,7 +458,7 @@ export function ProfileView({
           </div>
         )}
         {isOwn && (
-          <Button variant="outline" className="w-full mt-4 bg-transparent">
+          <Button variant="outline" className="w-full mt-4 bg-transparent" onClick={() => setShowEditDetailsSheet(true)}>
             <Edit className="w-4 h-4 mr-2" />
             Edit Profile
           </Button>
@@ -575,13 +574,6 @@ export function ProfileView({
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Digital Twin Section - Model Specific */}
-      {user.role === "model" && (
-        <div className="px-4 pb-4">
-          <DigitalTwinSection user={user} isOwn={isOwn} />
         </div>
       )}
 

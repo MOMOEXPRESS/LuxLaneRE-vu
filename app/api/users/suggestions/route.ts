@@ -42,10 +42,10 @@ export async function GET() {
     }
 
     // Strategy 2: Same role users (models follow models, brands follow brands)
-    const roleLower = user.role.toLowerCase()
+    const roleUpper = user.role.toUpperCase()
     const sameRoleUsers = await prisma.user.findMany({
       where: {
-        role: user.role,
+        role: roleUpper as any,
         id: { notIn: [...followedIds] },
       },
       include: { profile: true, _count: { select: { followers: true } } },
@@ -54,9 +54,9 @@ export async function GET() {
     })
 
     // Strategy 3: Complementary roles (models → brands/agencies, brands → models)
-    const complementaryRoles = roleLower === "model"
+    const complementaryRoles = roleUpper === "MODEL"
       ? ["BRAND", "AGENCY"]
-      : roleLower === "brand" || roleLower === "client"
+      : roleUpper === "BRAND" || roleUpper === "CLIENT"
         ? ["MODEL"]
         : ["MODEL", "BRAND"]
 

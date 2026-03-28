@@ -36,6 +36,7 @@ type InboxTab = "messages" | "bookings" | "notifications"
 interface InboxViewProps {
   onViewProfile?: (user: import("@/lib/types").User) => void
   initialConversationId?: string | null
+  onConversationOpened?: () => void
 }
 
 function mapApiConversationToConversation(apiConv: {
@@ -89,12 +90,13 @@ function mapApiConversationToConversation(apiConv: {
   }
 }
 
-export function InboxView({ onViewProfile, initialConversationId }: InboxViewProps = {}) {
+export function InboxView({ onViewProfile, initialConversationId, onConversationOpened }: InboxViewProps = {}) {
   const { user } = useAuth()
   const { conversations: apiConversations, isLoading: conversationsLoading, refresh: refreshConversations } = useConversations()
   const { notifications: apiNotifications, unreadCount, refresh: refreshNotifications } = useNotifications()
   const [activeTab, setActiveTab] = useState<InboxTab>("messages")
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
+  const [dismissedInitial, setDismissedInitial] = useState(false)
 
   const conversations = (apiConversations ?? []).map(mapApiConversationToConversation)
 
@@ -111,15 +113,16 @@ export function InboxView({ onViewProfile, initialConversationId }: InboxViewPro
     createdAt: new Date(n.createdAt),
   }))
 
-  // Auto-open conversation if initialConversationId is provided
+  // Auto-open conversation if initialConversationId is provided (only once)
   useEffect(() => {
-    if (initialConversationId && conversations.length > 0 && !selectedConversation) {
+    if (initialConversationId && conversations.length > 0 && !selectedConversation && !dismissedInitial) {
       const conv = conversations.find((c: Conversation) => c.id === initialConversationId)
       if (conv) {
         setSelectedConversation(conv)
+        onConversationOpened?.()
       }
     }
-  }, [initialConversationId, conversations, selectedConversation])
+  }, [initialConversationId, conversations, selectedConversation, dismissedInitial, onConversationOpened])
 
   // Fetch real bookings from store (loaded from DB)
   const { getApplicationsForModel } = useStore()
@@ -133,7 +136,7 @@ export function InboxView({ onViewProfile, initialConversationId }: InboxViewPro
     return (
       <ChatView
         conversation={selectedConversation}
-        onBack={() => setSelectedConversation(null)}
+        onBack={() => { setSelectedConversation(null); setDismissedInitial(true) }}
         onViewProfile={onViewProfile}
         refreshConversations={refreshConversations}
       />
