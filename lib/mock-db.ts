@@ -384,10 +384,9 @@ const seedFollows = [
 
 const seedUserSettings = seedUsers.map((u) => ({
   userId: u.id,
-  pushNotifs: true,
-  emailNotifs: true,
-  darkMode: false,
-  privacyMode: false,
+  notifications: { push: true, email: true },
+  darkMode: true,
+  privacy: { mode: "public" },
   createdAt: new Date(),
   updatedAt: new Date(),
 }))

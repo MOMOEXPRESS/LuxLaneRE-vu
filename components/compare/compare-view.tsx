@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { ArrowLeft, Scan, Shield, BadgeCheck, ChevronDown } from "lucide-react"
+import { ArrowLeft, Shield, BadgeCheck } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,7 +19,6 @@ interface CompareViewProps {
 
 export function CompareView({ models, casting, onBack, onViewProfile }: CompareViewProps) {
   const [model1, model2] = models
-  const [showDigitalTwin, setShowDigitalTwin] = useState(false)
 
   const score1 = casting ? calculateFitScore(model1, casting) : null
   const score2 = casting ? calculateFitScore(model2, casting) : null
@@ -99,12 +98,6 @@ export function CompareView({ models, casting, onBack, onViewProfile }: CompareV
               </Avatar>
               <p className="font-medium text-sm truncate">{model.name}</p>
               <div className="mt-1">{getVerificationBadge(model.verificationLevel)}</div>
-              {model.digitalTwin?.status === "complete" && (
-                <Badge variant="outline" className="mt-1 text-[10px]">
-                  <Scan className="w-2.5 h-2.5 mr-0.5" />
-                  Twin
-                </Badge>
-              )}
             </Card>
           </motion.div>
         ))}
@@ -212,45 +205,6 @@ export function CompareView({ models, casting, onBack, onViewProfile }: CompareV
         </Card>
       </div>
 
-      {/* Digital Twin Comparison */}
-      {(model1.digitalTwin?.status === "complete" || model2.digitalTwin?.status === "complete") && (
-        <div className="px-4">
-          <Card className="p-4">
-            <button
-              className="w-full flex items-center justify-between"
-              onClick={() => setShowDigitalTwin(!showDigitalTwin)}
-            >
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <Scan className="w-4 h-4" />
-                Digital Twin Comparison
-              </h3>
-              <ChevronDown className={`w-4 h-4 transition-transform ${showDigitalTwin ? "rotate-180" : ""}`} />
-            </button>
-
-            {showDigitalTwin && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                className="grid grid-cols-2 gap-4 mt-4"
-              >
-                {[model1, model2].map((model) => (
-                  <div key={model.id} className="text-center">
-                    {model.digitalTwin?.status === "complete" ? (
-                      <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center">
-                        <span className="text-4xl">🧍</span>
-                      </div>
-                    ) : (
-                      <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center">
-                        <p className="text-xs text-muted-foreground">No Twin</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </motion.div>
-            )}
-          </Card>
-        </div>
-      )}
     </div>
   )
 }

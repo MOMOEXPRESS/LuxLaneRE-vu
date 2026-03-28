@@ -12,7 +12,6 @@ type ViewType =
   | "casting"
   | "scoreboard"
   | "verification"
-  | "create-twin"
   | "compare"
   | "casting-room"
 

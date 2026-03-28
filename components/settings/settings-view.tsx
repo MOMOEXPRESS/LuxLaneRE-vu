@@ -14,7 +14,6 @@ import {
   Monitor,
   RefreshCw,
   Sparkles,
-  Scan,
   Database,
   BadgeCheck,
 } from "lucide-react"
@@ -32,12 +31,11 @@ import { ModerationDashboard } from "@/components/admin/moderation-dashboard"
 interface SettingsViewProps {
   onBack: () => void
   onOpenVerification?: () => void
-  onOpenDigitalTwin?: () => void
 }
 
 type SettingsSection = "main" | "account" | "notifications" | "privacy" | "help" | "dev" | "moderation"
 
-export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: SettingsViewProps) {
+export function SettingsView({ onBack, onOpenVerification }: SettingsViewProps) {
   const { user, logout, updateUser } = useAuth()
   const { theme, setTheme } = useTheme()
   const { settings: apiSettings, updateSettings } = useSettings()
@@ -198,7 +196,7 @@ export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: 
             </Badge>
           </div>
 
-          {/* Verification & Digital Twin (Model only) */}
+          {/* Verification (Model only) */}
           {user?.role === "model" && (
             <div className="space-y-2 mb-6">
               <button
@@ -229,29 +227,6 @@ export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: 
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </button>
 
-              <button
-                onClick={onOpenDigitalTwin}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
-              >
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    user.digitalTwin?.status === "complete" ? "bg-violet-500/10" : "bg-muted"
-                  }`}
-                >
-                  <Scan
-                    className={`w-5 h-5 ${
-                      user.digitalTwin?.status === "complete" ? "text-violet-500" : "text-muted-foreground"
-                    }`}
-                  />
-                </div>
-                <div className="flex-1 text-left">
-                  <div className="font-medium text-sm">Digital Twin</div>
-                  <div className="text-xs text-muted-foreground">
-                    {user.digitalTwin?.status === "complete" ? "View your twin" : "Create your 3D twin"}
-                  </div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </button>
             </div>
           )}
 
@@ -446,10 +421,6 @@ export function SettingsView({ onBack, onOpenVerification, onOpenDigitalTwin }: 
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Shortlists</span>
                   <span className="font-medium">{user.metrics.components.shortlists}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Digital Twin</span>
-                  <span className="font-medium capitalize">{user.digitalTwin?.status || "None"}</span>
                 </div>
               </div>
             </Card>

@@ -178,7 +178,7 @@ export function VerificationFlow({ onBack, onComplete }: VerificationFlowProps) 
                 </div>
                 <div className="flex gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                  <span>Enable Digital Twin creation</span>
+                  <span>Unlock premium casting features</span>
                 </div>
               </div>
             </div>
