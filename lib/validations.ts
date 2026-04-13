@@ -125,7 +125,7 @@ export const mediaPresignSchema = z.object({
 })
 
 export const mediaConfirmSchema = z.object({
-  url: z.string().url(),
+  url: z.string().min(1, "URL is required"),
   type: z.enum(["AVATAR", "PORTFOLIO", "POLAROID", "DOCUMENT", "TWIN_INPUT", "TWIN_OUTPUT"]),
   meta: z.record(z.unknown()).optional(),
 })
