@@ -84,6 +84,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           await prisma.conversationMember.create({
             data: { conversationId: room.id, userId: submission.modelId },
           })
+          // Create timeline event
+          await prisma.roomEvent.create({
+            data: {
+              conversationId: room.id,
+              type: "member_added",
+              userId: user.id,
+              targetUserId: submission.modelId,
+              message: `Booking confirmed — added to casting room`,
+            },
+          })
         }
       } catch (roomError) {
         console.error("Failed to add model to casting room:", roomError)

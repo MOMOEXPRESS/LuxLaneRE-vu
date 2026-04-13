@@ -44,10 +44,12 @@ interface InboxViewProps {
 function mapApiConversationToConversation(apiConv: {
   id: string
   type: string
+  castingTitle?: string | null
+  castingId?: string | null
   members: Array<{ id: string; displayName?: string; avatarUrl?: string | null; username: string }>
   lastMessage: { id: string; content: string; senderId: string; createdAt: string } | null
   unreadCount: number
-}): Conversation {
+}): Conversation & { castingTitle?: string | null; castingId?: string | null } {
   const participants: UserType[] = apiConv.members.map((m) => ({
     id: m.id,
     name: m.displayName ?? m.username,
@@ -84,7 +86,9 @@ function mapApiConversationToConversation(apiConv: {
       }
   return {
     id: apiConv.id,
-    type: apiConv.type as Conversation["type"],
+    type: (apiConv.type === "casting_room" ? "casting" : apiConv.type) as Conversation["type"],
+    castingTitle: apiConv.castingTitle,
+    castingId: apiConv.castingId,
     participants,
     lastMessage,
     unreadCount: apiConv.unreadCount,
@@ -211,7 +215,13 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
                     key={conversation.id}
                     conversation={conversation}
                     currentUserId={user?.id || ""}
-                    onClick={() => setSelectedConversation(conversation)}
+                    onClick={() => {
+                      if (conversation.type === "casting" && conversation.castingId && onOpenCastingRoom) {
+                        onOpenCastingRoom(conversation.castingId)
+                      } else {
+                        setSelectedConversation(conversation)
+                      }
+                    }}
                   />
                 ))}
               </div>
@@ -432,13 +442,14 @@ function ConversationItem({
   currentUserId,
   onClick,
 }: {
-  conversation: Conversation
+  conversation: Conversation & { castingTitle?: string | null; castingId?: string | null }
   currentUserId: string
   onClick: () => void
 }) {
+  const isCastingRoom = conversation.type === "casting"
   const otherUser = conversation.participants.find((p) => p.id !== currentUserId) || conversation.participants[0]
 
-  if (!otherUser) return null
+  if (!otherUser && !isCastingRoom) return null
 
   const formatMessageTime = (date: Date) => {
     if (isToday(date)) return format(date, "HH:mm")
@@ -453,8 +464,17 @@ function ConversationItem({
     >
       <div className="relative">
         <Avatar className="w-12 h-12">
-          <AvatarImage src={otherUser.avatar || "/placeholder.svg"} alt={otherUser.name} />
-          <AvatarFallback>{otherUser.name[0]}</AvatarFallback>
+          {isCastingRoom ? (
+            <>
+              <AvatarImage src="/placeholder.svg" />
+              <AvatarFallback className="bg-violet-600 text-white text-xs">CR</AvatarFallback>
+            </>
+          ) : (
+            <>
+              <AvatarImage src={otherUser?.avatar || "/placeholder.svg"} alt={otherUser?.name} />
+              <AvatarFallback>{otherUser?.name?.[0]}</AvatarFallback>
+            </>
+          )}
         </Avatar>
         {conversation.unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 w-5 h-5 bg-foreground text-background text-xs font-medium rounded-full flex items-center justify-center">
@@ -466,9 +486,10 @@ function ConversationItem({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1">
             <span className={`font-medium truncate ${conversation.unreadCount > 0 ? "" : "text-muted-foreground"}`}>
-              {otherUser.name}
+              {isCastingRoom ? (conversation as any).castingTitle || "Casting Room" : otherUser?.name || "Unknown"}
             </span>
-            {otherUser.verified && <BadgeCheck className="w-4 h-4 text-foreground shrink-0" />}
+            {isCastingRoom && <Badge variant="secondary" className="text-[9px] ml-1 shrink-0">Room</Badge>}
+            {!isCastingRoom && otherUser?.verified && <BadgeCheck className="w-4 h-4 text-foreground shrink-0" />}
           </div>
           <span className="text-xs text-muted-foreground shrink-0">
             {conversation.lastMessage.id

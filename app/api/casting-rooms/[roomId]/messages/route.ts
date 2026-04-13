@@ -15,9 +15,25 @@ export async function GET(
 
     const { roomId } = await params
 
-    const membership = await prisma.conversationMember.findUnique({
+    let membership = await prisma.conversationMember.findUnique({
       where: { conversationId_userId: { conversationId: roomId, userId: user.id } },
     })
+
+    // Auto-add if user has a CONFIRMED submission for this casting
+    if (!membership) {
+      const room = await prisma.conversation.findUnique({ where: { id: roomId }, select: { castingId: true } })
+      if (room?.castingId) {
+        const confirmed = await prisma.submission.findFirst({
+          where: { castingId: room.castingId, modelId: user.id, status: "CONFIRMED" },
+        })
+        if (confirmed) {
+          membership = await prisma.conversationMember.create({
+            data: { conversationId: roomId, userId: user.id },
+          })
+        }
+      }
+    }
+
     if (!membership) {
       return NextResponse.json({ error: "Not a member of this room" }, { status: 403 })
     }
@@ -72,9 +88,25 @@ export async function POST(
 
     const { roomId } = await params
 
-    const membership = await prisma.conversationMember.findUnique({
+    let membership = await prisma.conversationMember.findUnique({
       where: { conversationId_userId: { conversationId: roomId, userId: user.id } },
     })
+
+    // Auto-add if user has a CONFIRMED submission for this casting
+    if (!membership) {
+      const room = await prisma.conversation.findUnique({ where: { id: roomId }, select: { castingId: true } })
+      if (room?.castingId) {
+        const confirmed = await prisma.submission.findFirst({
+          where: { castingId: room.castingId, modelId: user.id, status: "CONFIRMED" },
+        })
+        if (confirmed) {
+          membership = await prisma.conversationMember.create({
+            data: { conversationId: roomId, userId: user.id },
+          })
+        }
+      }
+    }
+
     if (!membership) {
       return NextResponse.json({ error: "Not a member of this room" }, { status: 403 })
     }
