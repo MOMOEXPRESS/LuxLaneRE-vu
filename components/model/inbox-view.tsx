@@ -426,6 +426,8 @@ function ConversationItem({
 }) {
   const otherUser = conversation.participants.find((p) => p.id !== currentUserId) || conversation.participants[0]
 
+  if (!otherUser) return null
+
   const formatMessageTime = (date: Date) => {
     if (isToday(date)) return format(date, "HH:mm")
     if (isYesterday(date)) return "Yesterday"
