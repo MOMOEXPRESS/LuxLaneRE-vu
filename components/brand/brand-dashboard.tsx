@@ -558,8 +558,8 @@ function AgencyMyModelsView({ onViewProfile }: { onViewProfile?: (user: User) =>
   }, [fetchRoster])
 
   useEffect(() => {
-    if (showApplications) fetchApplications()
-  }, [showApplications, fetchApplications])
+    fetchApplications() // Always fetch on mount to show badge count
+  }, [fetchApplications])
 
   if (loading) {
     return (
