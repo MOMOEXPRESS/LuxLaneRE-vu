@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -82,6 +82,28 @@ export function ProfileView({
   const { castings } = useStore()
   const [activeTab, setActiveTab] = useState<ProfileTab>("portfolio")
   const [portfolioFilter, setPortfolioFilter] = useState<string>("all")
+  const [dbPortfolio, setDbPortfolio] = useState<Array<{ id: string; url: string; type: string; meta?: any }>>([])
+  const [dbPosts, setDbPosts] = useState<Array<{ id: string; imageUrl: string; caption?: string | null; createdAt: string }>>([])
+
+  // Fetch portfolio + posts from DB on mount and after updates
+  const fetchProfileData = useCallback(async () => {
+    if (!user?.id) return
+    // Portfolio
+    const mediaRes = await api.getMedia(user.id, "PORTFOLIO")
+    const mediaData = mediaRes.data as { media?: Array<{ id: string; url: string; type: string; meta?: any }> } | undefined
+    if (mediaData?.media) setDbPortfolio(mediaData.media)
+
+    // Posts
+    const postsRes = await api.getPosts({ limit: 50 })
+    const postsData = postsRes.data as { posts?: Array<{ id: string; userId: string; imageUrl: string; caption?: string | null; createdAt: string }> } | undefined
+    if (postsData?.posts) {
+      setDbPosts(postsData.posts.filter((p) => p.userId === user.id))
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    fetchProfileData()
+  }, [fetchProfileData])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [showInviteSheet, setShowInviteSheet] = useState(false)
@@ -245,7 +267,13 @@ export function ProfileView({
     )
   }
 
-  const allImages = user.portfolio || []
+  // Use DB-fetched portfolio images, fall back to user.portfolio for static data
+  const filteredPortfolio = portfolioFilter === "all"
+    ? dbPortfolio
+    : dbPortfolio.filter((p) => p.meta?.category === portfolioFilter)
+  const allImages = filteredPortfolio.length > 0 || dbPortfolio.length > 0
+    ? filteredPortfolio.map((p) => p.url)
+    : (user.portfolio || [])
 
   const handlePrevImage = () => {
     setLightboxIndex((prev) => (prev > 0 ? prev - 1 : allImages.length - 1))
@@ -714,19 +742,27 @@ export function ProfileView({
               </motion.div>
             )}
 
-            {activeTab === "posts" && user.posts && user.posts.length > 0 && (
+            {activeTab === "posts" && (
               <motion.div key="posts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-4">
-                <div className="grid grid-cols-3 gap-1">
-                  {user.posts.map((post) => (
-                    <div key={post.id} className="aspect-square bg-muted rounded-lg overflow-hidden">
-                      <img
-                        src={post.imageUrl || "/placeholder.svg"}
-                        alt={post.caption ?? "Post"}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
+                {(dbPosts.length > 0 || (user.posts && user.posts.length > 0)) ? (
+                  <div className="grid grid-cols-3 gap-1">
+                    {(dbPosts.length > 0 ? dbPosts : user.posts || []).map((post) => (
+                      <div key={post.id} className="aspect-square bg-muted rounded-lg overflow-hidden">
+                        <img
+                          src={post.imageUrl || "/placeholder.svg"}
+                          alt={post.caption ?? "Post"}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Grid3X3 className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p>No posts yet</p>
+                    <p className="text-xs mt-1">Share your first moment</p>
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -1130,6 +1166,7 @@ export function ProfileView({
                           await api.confirmMedia({ url: data.url, type: "PORTFOLIO", meta: { category: portfolioCategory } })
                           setShowAddPortfolioSheet(false)
                           setPortfolioCategory("all")
+                          fetchProfileData()
                           onProfileUpdated?.()
                         }
                       } else {
