@@ -102,6 +102,38 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
         }}
       />
 
+      {/* Welcome Card — for new users with no followers/posts */}
+      {user && feedPosts.length === 0 && !postsLoading && (
+        <div className="px-4 pt-2 pb-3">
+          <Card className="p-5 bg-gradient-to-br from-zinc-900 to-zinc-800 border-zinc-700">
+            <h3 className="font-bold text-lg mb-1">Welcome to Luxlane! 👋</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {user.role === "model"
+                ? "Start by completing your profile, browsing castings, and following brands."
+                : user.role === "agency"
+                  ? "Scout models, create castings, and build your roster."
+                  : user.role === "brand"
+                    ? "Create your first casting, browse models, and find the perfect talent."
+                    : "Browse models, create castings, and connect with talent."}
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              {user.role === "model" && (
+                <>
+                  <Button size="sm" variant="secondary" onClick={onViewCastingsHub}>Browse Castings</Button>
+                  <Button size="sm" variant="outline" className="bg-transparent" onClick={() => setShowCreatePost(true)}>Create Post</Button>
+                </>
+              )}
+              {(user.role === "brand" || user.role === "client") && (
+                <Button size="sm" variant="secondary" onClick={onViewCastingsHub}>Create Casting</Button>
+              )}
+              {user.role === "agency" && (
+                <Button size="sm" variant="secondary" onClick={onViewCastingsHub}>Scout Models</Button>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Story Viewer */}
       {viewingStories && (
         <StoryViewer
