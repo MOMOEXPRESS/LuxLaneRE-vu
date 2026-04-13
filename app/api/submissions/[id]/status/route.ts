@@ -60,6 +60,44 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       notificationType = "CONFIRMED"
       notificationTitle = "You're confirmed!"
       notificationBody = `Your booking for "${submission.casting.title}" has been confirmed`
+
+      // Auto-add model to casting room (uses Conversation model with type "casting_room")
+      try {
+        let room = await prisma.conversation.findFirst({
+          where: { type: "casting_room", castingId: submission.castingId },
+        })
+        if (!room) {
+          room = await prisma.conversation.create({
+            data: {
+              type: "casting_room",
+              castingId: submission.castingId,
+              status: "active",
+              members: { create: { userId: submission.casting.createdBy } },
+            },
+          })
+        }
+        // Add model as member (skip if already member)
+        const existingMember = await prisma.conversationMember.findFirst({
+          where: { conversationId: room.id, userId: submission.modelId },
+        })
+        if (!existingMember) {
+          await prisma.conversationMember.create({
+            data: { conversationId: room.id, userId: submission.modelId },
+          })
+          // Create timeline event
+          await prisma.roomEvent.create({
+            data: {
+              conversationId: room.id,
+              type: "member_added",
+              userId: user.id,
+              targetUserId: submission.modelId,
+              message: `Booking confirmed — added to casting room`,
+            },
+          })
+        }
+      } catch (roomError) {
+        console.error("Failed to add model to casting room:", roomError)
+      }
     } else if (newStatus === "REJECTED") {
       notificationType = "SYSTEM"
       notificationTitle = "Application Update"

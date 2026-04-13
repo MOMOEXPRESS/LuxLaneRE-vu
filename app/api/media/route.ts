@@ -5,13 +5,13 @@ import { getCurrentUser } from "@/lib/auth"
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-    }
-
     const { searchParams } = new URL(request.url)
-    const ownerId = searchParams.get("ownerId") || user.id
+    const ownerId = searchParams.get("ownerId") || user?.id
     const type = searchParams.get("type")
+
+    if (!ownerId) {
+      return NextResponse.json({ error: "Not authenticated and no ownerId provided" }, { status: 401 })
+    }
 
     const media = await prisma.mediaAsset.findMany({
       where: {

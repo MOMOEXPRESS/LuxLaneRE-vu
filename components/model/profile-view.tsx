@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,7 @@ import {
   MapPin,
   Settings,
   Share2,
+  MessageCircle,
   Grid3X3,
   Calendar,
   Edit,
@@ -53,7 +54,7 @@ import {
 import { uploadAvatar } from "@/lib/upload"
 import { mockUsers } from "@/lib/mock-data"
 
-type ProfileTab = "portfolio" | "posts" | "details" | "availability" | "analytics" | "earnings"
+type ProfileTab = "portfolio" | "posts" | "details" | "availability"
 
 interface ProfileViewProps {
   user?: User
@@ -82,8 +83,54 @@ export function ProfileView({
   const { castings } = useStore()
   const [activeTab, setActiveTab] = useState<ProfileTab>("portfolio")
   const [portfolioFilter, setPortfolioFilter] = useState<string>("all")
+  const [dbPortfolio, setDbPortfolio] = useState<Array<{ id: string; url: string; type: string; meta?: any }>>([])
+  const [dbPosts, setDbPosts] = useState<Array<{ id: string; imageUrl: string; caption?: string | null; createdAt: string }>>([])
+  const [liveMeasurements, setLiveMeasurements] = useState<typeof user.measurements | undefined>(undefined)
+  const [agencyInfo, setAgencyInfo] = useState<{ id: string; name: string; avatar?: string; location?: string } | null>(null)
+
+  // Resolve the user (prop or current auth user)
+  const resolvedUserId = profileUser?.id || currentUser?.id
+
+  // Fetch portfolio + posts + measurements from DB on mount and after updates
+  const fetchProfileData = useCallback(async () => {
+    if (!resolvedUserId) return
+    // Portfolio
+    const mediaRes = await api.getMedia(resolvedUserId, "PORTFOLIO")
+    const mediaData = mediaRes.data as { media?: Array<{ id: string; url: string; type: string; meta?: any }> } | undefined
+    if (mediaData?.media) setDbPortfolio(mediaData.media)
+
+    // Posts
+    const postsRes = await api.getPosts({ limit: 50 })
+    const postsData = postsRes.data as { posts?: Array<{ id: string; userId: string; imageUrl: string; caption?: string | null; createdAt: string }> } | undefined
+    if (postsData?.posts) {
+      setDbPosts(postsData.posts.filter((p) => p.userId === resolvedUserId))
+    }
+
+    // Refresh measurements + agency from profile API
+    const profileRes = await api.getMyProfile()
+    const profileData = profileRes.data as { profile?: { measurements?: any; agencyId?: string; agencyName?: string; agencyAvatar?: string; agencyLocation?: string } } | undefined
+    if (profileData?.profile?.measurements) {
+      setLiveMeasurements(profileData.profile.measurements)
+    }
+    if (profileData?.profile?.agencyId) {
+      setAgencyInfo({
+        id: profileData.profile.agencyId,
+        name: profileData.profile.agencyName || "Agency",
+        avatar: profileData.profile.agencyAvatar,
+        location: profileData.profile.agencyLocation,
+      })
+    }
+  }, [resolvedUserId])
+
+  useEffect(() => {
+    fetchProfileData()
+  }, [fetchProfileData])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState(0)
+  const [showCreatePostSheet, setShowCreatePostSheet] = useState(false)
+  const [newPostImage, setNewPostImage] = useState("")
+  const [newPostCaption, setNewPostCaption] = useState("")
+  const [postCreating, setPostCreating] = useState(false)
   const [showInviteSheet, setShowInviteSheet] = useState(false)
   const [showEditDetailsSheet, setShowEditDetailsSheet] = useState(false)
   const [detailsSaving, setDetailsSaving] = useState(false)
@@ -92,6 +139,7 @@ export function ProfileView({
   const [addPortfolioUrl, setAddPortfolioUrl] = useState("")
   const [addPortfolioSaving, setAddPortfolioSaving] = useState(false)
   const [addPortfolioError, setAddPortfolioError] = useState<string | null>(null)
+  const [portfolioCategory, setPortfolioCategory] = useState<string>("all")
 
   const [hasAppliedToAgency, setHasAppliedToAgency] = useState(false)
   const [showAgencyApplySheet, setShowAgencyApplySheet] = useState(false)
@@ -120,6 +168,8 @@ export function ProfileView({
   const [deletingMedia, setDeletingMedia] = useState<string | null>(null)
 
   const user = profileUser || currentUser
+  // Use live measurements (from DB fetch) if available, otherwise fall back to user prop
+  const measurements = liveMeasurements || user?.measurements
   const isBrandOrAgency = currentUser?.role === "brand" || currentUser?.role === "agency"
 
   // Check block status + track profile view for non-own profiles
@@ -211,16 +261,11 @@ export function ProfileView({
     : []
   const canApplyToAgency = !isOwn && isAgency && currentUser?.role === "model"
 
-  const hasPosts = (user.posts?.length ?? 0) > 0
   const tabs: { id: ProfileTab; label: string; icon: React.ReactNode }[] = [
     { id: "portfolio", label: "Portfolio", icon: <Grid3X3 className="w-4 h-4" /> },
-    ...(hasPosts ? [{ id: "posts" as const, label: "Posts", icon: <Grid3X3 className="w-4 h-4" /> }] : []),
+    { id: "posts", label: "Posts", icon: <Grid3X3 className="w-4 h-4" /> },
     { id: "details", label: "Details", icon: <Briefcase className="w-4 h-4" /> },
     { id: "availability", label: "Availability", icon: <Calendar className="w-4 h-4" /> },
-    ...(isOwn ? [
-      { id: "analytics" as const, label: "Analytics", icon: <TrendingUp className="w-4 h-4" /> },
-      { id: "earnings" as const, label: "Earnings", icon: <Star className="w-4 h-4" /> },
-    ] : []),
   ]
 
   const portfolioFilters = ["all", "runway", "editorial", "campaign", "commercial"]
@@ -249,7 +294,13 @@ export function ProfileView({
     )
   }
 
-  const allImages = user.portfolio || []
+  // Use DB-fetched portfolio images, fall back to user.portfolio for static data
+  const filteredPortfolio = portfolioFilter === "all"
+    ? dbPortfolio
+    : dbPortfolio.filter((p) => p.meta?.category === portfolioFilter)
+  const allImages = filteredPortfolio.length > 0 || dbPortfolio.length > 0
+    ? filteredPortfolio.map((p) => p.url)
+    : (user.portfolio || [])
 
   const handlePrevImage = () => {
     setLightboxIndex((prev) => (prev > 0 ? prev - 1 : allImages.length - 1))
@@ -376,17 +427,17 @@ export function ProfileView({
         {/* Quick Stats Row - Model Specific */}
         {user.role === "model" && (
           <div className="flex gap-2 mt-4 overflow-x-auto pb-2 -mx-4 px-4">
-            {user.measurements?.height && (
+            {measurements?.height && (
               <Card className="flex-shrink-0 px-3 py-2 bg-muted/50">
                 <p className="text-xs text-muted-foreground">Height</p>
-                <p className="font-semibold text-sm">{user.measurements.height}</p>
+                <p className="font-semibold text-sm">{measurements?.height}</p>
               </Card>
             )}
-            {user.measurements && (
+            {measurements && (
               <Card className="flex-shrink-0 px-3 py-2 bg-muted/50">
                 <p className="text-xs text-muted-foreground">Measurements</p>
                 <p className="font-semibold text-sm">
-                  {user.measurements.bust}/{user.measurements.waist}/{user.measurements.hips}
+                  {measurements?.bust}/{measurements?.waist}/{measurements?.hips}
                 </p>
               </Card>
             )}
@@ -451,9 +502,25 @@ export function ProfileView({
               Message
             </Button>
             {isBrandOrAgency && user.role === "model" && (
-              <Button variant="outline" onClick={() => setShowInviteSheet(true)}>
-                Invite
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setShowInviteSheet(true)}>
+                  Invite
+                </Button>
+                {currentUser?.role === "agency" && (
+                  <Button
+                    variant="outline"
+                    className="bg-transparent"
+                    onClick={async () => {
+                      const res = await api.inviteModelToAgency(user.id)
+                      if (res.error) alert(res.error)
+                      else alert("Invitation sent!")
+                    }}
+                  >
+                    <UserPlus className="w-4 h-4 mr-1" />
+                    Roster
+                  </Button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -585,19 +652,19 @@ export function ProfileView({
       {/* Tabs Navigation */}
       {user.role === "model" && (
         <>
-          <div className="flex border-b border-border sticky top-14 bg-background z-30">
+          <div className="flex justify-around border-b border-border sticky top-14 bg-background z-30 px-2">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 py-3 flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                className={`py-3 px-4 flex items-center justify-center gap-2 border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? "border-foreground text-foreground"
                     : "border-transparent text-muted-foreground"
                 }`}
               >
                 {tab.icon}
-                <span className="text-sm">{tab.label}</span>
+                <span className="text-sm font-medium">{tab.label}</span>
               </button>
             ))}
           </div>
@@ -646,18 +713,17 @@ export function ProfileView({
                 )}
 
                 {/* Portfolio Grid */}
-                <div className="grid grid-cols-3 gap-0.5 p-0.5">
+                <div className="relative">
+                  {/* Floating add button */}
                   {isOwn && user.role === "model" && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="aspect-[3/4] bg-muted border-2 border-dashed border-muted-foreground/30 rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:bg-muted/80 hover:border-muted-foreground/50 transition-colors"
+                    <button
                       onClick={() => setShowAddPortfolioSheet(true)}
+                      className="absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-foreground text-background flex items-center justify-center shadow-lg hover:opacity-90 transition-opacity"
                     >
-                      <Plus className="w-8 h-8" />
-                      <span className="text-xs font-medium">Add photo</span>
-                    </motion.button>
+                      <Plus className="w-5 h-5" />
+                    </button>
                   )}
+                <div className="grid grid-cols-3 gap-0.5 p-0.5">
                   {editingPortfolio ? (
                     // Edit mode: show portfolio items with delete buttons
                     portfolioItems.map((item, i) => (
@@ -711,26 +777,58 @@ export function ProfileView({
                       </motion.button>
                     ))
                   )}
-                  {allImages.length === 0 && !editingPortfolio && !(isOwn && user.role === "model") && (
-                    <div className="col-span-3 py-12 text-center text-muted-foreground">No portfolio images yet</div>
+                  {allImages.length === 0 && !editingPortfolio && (
+                    <div className="col-span-3 py-12 text-center text-muted-foreground">
+                      {isOwn ? "Tap + to add your first photo" : "No portfolio images yet"}
+                    </div>
                   )}
+                </div>
                 </div>
               </motion.div>
             )}
 
-            {activeTab === "posts" && user.posts && user.posts.length > 0 && (
-              <motion.div key="posts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-4">
-                <div className="grid grid-cols-3 gap-1">
-                  {user.posts.map((post) => (
-                    <div key={post.id} className="aspect-square bg-muted rounded-lg overflow-hidden">
-                      <img
-                        src={post.imageUrl || "/placeholder.svg"}
-                        alt={post.caption ?? "Post"}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
+            {activeTab === "posts" && (
+              <motion.div key="posts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative">
+                {/* Floating add post button - same style as portfolio */}
+                {isOwn && (
+                  <button
+                    onClick={() => setShowCreatePostSheet(true)}
+                    className="absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-foreground text-background flex items-center justify-center shadow-lg hover:opacity-90 transition-opacity"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                )}
+                {(dbPosts.length > 0 || (user.posts && user.posts.length > 0)) ? (
+                  <div className="grid grid-cols-3 gap-0.5 p-0.5">
+                    {(dbPosts.length > 0 ? dbPosts : user.posts || []).map((post) => (
+                      <button
+                        key={post.id}
+                        className="aspect-square bg-muted overflow-hidden relative group"
+                        onClick={() => {
+                          setLightboxImage(post.imageUrl)
+                          setLightboxIndex(0)
+                        }}
+                      >
+                        <img
+                          src={post.imageUrl || "/placeholder.svg"}
+                          alt={post.caption ?? "Post"}
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        />
+                        {/* Hover overlay with like/comment counts */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white text-sm font-medium">
+                          <span className="flex items-center gap-1"><Heart className="w-4 h-4" /> {(post as any).likes ?? 0}</span>
+                          <span className="flex items-center gap-1"><MessageCircle className="w-4 h-4" /> {(post as any).comments ?? 0}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground px-4">
+                    <Grid3X3 className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p>No posts yet</p>
+                    <p className="text-xs mt-1">Share your first moment</p>
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -750,59 +848,93 @@ export function ProfileView({
                     </Button>
                   </div>
                 )}
-                {/* Measurements Card */}
-                {user.measurements && (
-                  <Card className="p-4">
-                    <h3 className="font-semibold mb-3">Measurements</h3>
-                    <div className="grid grid-cols-3 gap-3 text-sm">
-                      <div>
-                        <p className="text-muted-foreground text-xs">Height</p>
-                        <p className="font-medium">{user.measurements.height}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Bust</p>
-                        <p className="font-medium">{user.measurements.bust}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Waist</p>
-                        <p className="font-medium">{user.measurements.waist}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Hips</p>
-                        <p className="font-medium">{user.measurements.hips}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Shoes</p>
-                        <p className="font-medium">{user.measurements.shoeSize}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Dress</p>
-                        <p className="font-medium">{user.measurements.dressSize || "—"}</p>
-                      </div>
-                    </div>
-                  </Card>
-                )}
 
-                {/* Physical Attributes */}
-                {user.measurements && (
-                  <Card className="p-4">
-                    <h3 className="font-semibold mb-3">Physical Attributes</h3>
-                    <div className="grid grid-cols-3 gap-3 text-sm">
-                      <div>
-                        <p className="text-muted-foreground text-xs">Hair</p>
-                        <p className="font-medium">{user.measurements.hairColor}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Eyes</p>
-                        <p className="font-medium">{user.measurements.eyeColor}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Skin Tone</p>
-                        <p className="font-medium">{user.skinTone || "—"}</p>
-                      </div>
+                {/* Human Silhouette with Measurements */}
+                <div className="relative flex justify-center py-4">
+                  {/* SVG Silhouette */}
+                  <div className="relative" style={{ width: 160, height: 340 }}>
+                    <svg viewBox="0 0 160 340" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {/* Head */}
+                      <circle cx="80" cy="30" r="22" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Neck */}
+                      <line x1="80" y1="52" x2="80" y2="65" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Shoulders */}
+                      <line x1="40" y1="75" x2="120" y2="75" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Torso */}
+                      <path d="M 40 75 L 45 140 L 55 160 L 105 160 L 115 140 L 120 75" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Waist line */}
+                      <line x1="50" y1="130" x2="110" y2="130" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" className="text-muted-foreground/20" />
+                      {/* Hips */}
+                      <path d="M 55 160 L 50 170 L 120 170 L 105 160" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Left leg */}
+                      <path d="M 55 170 L 50 260 L 48 310" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Right leg */}
+                      <path d="M 105 170 L 110 260 L 112 310" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Left arm */}
+                      <path d="M 40 75 L 25 130 L 20 160" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Right arm */}
+                      <path d="M 120 75 L 135 130 L 140 160" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Feet */}
+                      <line x1="42" y1="310" x2="55" y2="310" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      <line x1="106" y1="310" x2="118" y2="310" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                    </svg>
+
+                    {/* Measurement labels positioned around the figure */}
+                    {/* Hair — top left */}
+                    <div className="absolute -left-20 top-2 text-right w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Hair</p>
+                      <p className="text-xs font-semibold">{measurements?.hairColor || "—"}</p>
                     </div>
-                  </Card>
-                )}
+
+                    {/* Eyes — top right */}
+                    <div className="absolute -right-20 top-2 text-left w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Eyes</p>
+                      <p className="text-xs font-semibold">{measurements?.eyeColor || "—"}</p>
+                    </div>
+
+                    {/* Height — left, upper */}
+                    <div className="absolute -left-20 top-[75px] text-right w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Height</p>
+                      <p className="text-sm font-bold text-foreground">{measurements?.height || "—"}</p>
+                    </div>
+
+                    {/* Bust — right of chest */}
+                    <div className="absolute -right-20 top-[90px] text-left w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Bust</p>
+                      <p className="text-xs font-semibold">{measurements?.bust || "—"}</p>
+                    </div>
+
+                    {/* Waist — left of waist */}
+                    <div className="absolute -left-20 top-[130px] text-right w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Waist</p>
+                      <p className="text-xs font-semibold">{measurements?.waist || "—"}</p>
+                    </div>
+
+                    {/* Hips — right of hips */}
+                    <div className="absolute -right-20 top-[165px] text-left w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Hips</p>
+                      <p className="text-xs font-semibold">{measurements?.hips || "—"}</p>
+                    </div>
+
+                    {/* Dress Size — left, lower */}
+                    <div className="absolute -left-20 top-[200px] text-right w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Dress</p>
+                      <p className="text-xs font-semibold">{measurements?.dressSize || "—"}</p>
+                    </div>
+
+                    {/* Inseam/Leg — right, lower */}
+                    <div className="absolute -right-20 top-[240px] text-left w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Skin</p>
+                      <p className="text-xs font-semibold">{user.skinTone || "—"}</p>
+                    </div>
+
+                    {/* Shoe Size — bottom */}
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-0 text-center">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Shoes</p>
+                      <p className="text-xs font-semibold">{measurements?.shoeSize || "—"}</p>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Languages */}
                 {user.languages && user.languages.length > 0 && (
@@ -835,19 +967,40 @@ export function ProfileView({
                   </Card>
                 )}
 
-                {/* Agency */}
-                {user.agencyId && user.agencyName && (
+                {/* Agency — show from DB agencyInfo or static user data */}
+                {(agencyInfo || (user.agencyId && user.agencyName)) && (
                   <Card className="p-4">
                     <h3 className="font-semibold mb-3">Represented By</h3>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage src={user.agencyAvatar || "/placeholder.svg"} />
-                        <AvatarFallback>{user.agencyName?.[0] || "A"}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">{user.agencyName}</p>
-                        <p className="text-sm text-muted-foreground">{user.agencyLocation || "Agency"}</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={agencyInfo?.avatar || user.agencyAvatar || "/placeholder.svg"} />
+                          <AvatarFallback>{(agencyInfo?.name || user.agencyName)?.[0] || "A"}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{agencyInfo?.name || user.agencyName}</p>
+                          <p className="text-sm text-muted-foreground">{agencyInfo?.location || user.agencyLocation || "Agency"}</p>
+                        </div>
                       </div>
+                      {/* Leave agency button for own profile */}
+                      {isOwn && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-red-400"
+                          onClick={async () => {
+                            if (!confirm("Leave this agency? You can reapply later.")) return
+                            // Call leave agency API (model removes themselves)
+                            const res = await api.updateModelProfile({ agencyId: null })
+                            if (!res.error) {
+                              setAgencyInfo(null)
+                              fetchProfileData()
+                            }
+                          }}
+                        >
+                          Leave
+                        </Button>
+                      )}
                     </div>
                   </Card>
                 )}
@@ -934,30 +1087,6 @@ export function ProfileView({
             )}
 
             {/* Analytics tab — own profile only */}
-            {activeTab === "analytics" && isOwn && (
-              <motion.div
-                key="analytics"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="p-4"
-              >
-                <ProfileAnalytics />
-              </motion.div>
-            )}
-
-            {/* Earnings tab — own profile only */}
-            {activeTab === "earnings" && isOwn && (
-              <motion.div
-                key="earnings"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="p-4"
-              >
-                <EarningsDashboard />
-              </motion.div>
-            )}
           </AnimatePresence>
         </>
       )}
@@ -1035,13 +1164,18 @@ export function ProfileView({
                 <Card
                   key={casting.id}
                   className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => {
-                    onInviteToCasting?.(casting)
-                    setShowInviteSheet(false)
+                  onClick={async () => {
+                    const res = await api.inviteModelToCasting(casting.id, user.id)
+                    if (res.error) {
+                      alert(res.error)
+                    } else {
+                      setShowInviteSheet(false)
+                    }
                   }}
                 >
                   <h4 className="font-medium">{casting.title}</h4>
-                  <p className="text-sm text-muted-foreground">{casting.type}</p>
+                  <p className="text-sm text-muted-foreground capitalize">{casting.type}</p>
+                  <p className="text-xs text-muted-foreground">{casting.location}</p>
                 </Card>
               ))
             ) : (
@@ -1060,92 +1194,150 @@ export function ProfileView({
           <SheetHeader>
             <SheetTitle>Add portfolio photo</SheetTitle>
           </SheetHeader>
-          <form
-            className="mt-4 space-y-4"
-            onSubmit={async (e) => {
-              e.preventDefault()
-              const url = addPortfolioUrl.trim()
-              if (!url) return
-              setAddPortfolioError(null)
-              setAddPortfolioSaving(true)
-              const res = await api.addPortfolioImage(url)
-              setAddPortfolioSaving(false)
-              if (res.error) {
-                setAddPortfolioError(res.error)
-                return
-              }
-              setAddPortfolioUrl("")
-              setShowAddPortfolioSheet(false)
-              onProfileUpdated?.()
-            }}
-          >
+          <div className="mt-4 space-y-4">
             {addPortfolioError && (
               <p className="text-sm text-destructive bg-destructive/10 p-2 rounded">{addPortfolioError}</p>
             )}
-            <div className="space-y-3">
-              {/* File upload option */}
-              <div>
-                <Label className="text-sm font-medium">Upload from device</Label>
-                <label className="mt-1 flex items-center justify-center w-full h-24 border-2 border-dashed border-muted-foreground/30 rounded-xl cursor-pointer hover:border-muted-foreground/50 transition-colors">
-                  <div className="text-center">
-                    <Camera className="w-6 h-6 mx-auto text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground mt-1">Tap to choose photo</p>
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      setAddPortfolioSaving(true)
-                      const formData = new FormData()
-                      formData.append("file", file)
-                      formData.append("type", "portfolio")
+
+            {/* Category selector */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Category</Label>
+              <div className="flex gap-2 flex-wrap">
+                {["runway", "editorial", "campaign", "commercial"].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setPortfolioCategory(cat)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors capitalize ${
+                      portfolioCategory === cat
+                        ? "bg-foreground text-background"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Upload button */}
+            <div>
+              <label className="flex items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/30 rounded-xl cursor-pointer hover:border-muted-foreground/50 transition-colors">
+                <div className="text-center">
+                  {addPortfolioSaving ? (
+                    <>
+                      <div className="w-8 h-8 mx-auto border-2 border-muted-foreground border-t-foreground rounded-full animate-spin" />
+                      <p className="text-xs text-muted-foreground mt-2">Uploading...</p>
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="w-8 h-8 mx-auto text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground mt-2">Tap to upload photo</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">JPG, PNG up to 10MB</p>
+                    </>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={addPortfolioSaving}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setAddPortfolioSaving(true)
+                    setAddPortfolioError(null)
+                    const formData = new FormData()
+                    formData.append("file", file)
+                    formData.append("type", "portfolio")
+                    try {
                       const uploadRes = await fetch("/api/media/upload", { method: "POST", credentials: "include", body: formData })
                       if (uploadRes.ok) {
                         const data = await uploadRes.json()
-                        const url = data.url
-                        if (url) {
-                          await api.addPortfolioImage(url)
+                        if (data.url) {
+                          await api.confirmMedia({ url: data.url, type: "PORTFOLIO", meta: { category: portfolioCategory } })
                           setShowAddPortfolioSheet(false)
+                          setPortfolioCategory("all")
+                          fetchProfileData()
                           onProfileUpdated?.()
                         }
+                      } else {
+                        setAddPortfolioError("Upload failed. Try again.")
                       }
-                      setAddPortfolioSaving(false)
-                    }}
-                  />
-                </label>
-              </div>
-
-              {/* OR divider */}
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground">or</span>
-                <div className="flex-1 h-px bg-border" />
-              </div>
-
-              {/* URL option */}
-              <div className="space-y-2">
-                <Label htmlFor="portfolioUrl">Paste image URL</Label>
-                <Input
-                  id="portfolioUrl"
-                  type="url"
-                  placeholder="https://example.com/photo.jpg"
-                  value={addPortfolioUrl}
-                  onChange={(e) => setAddPortfolioUrl(e.target.value)}
+                    } catch {
+                      setAddPortfolioError("Something went wrong.")
+                    }
+                    setAddPortfolioSaving(false)
+                  }}
                 />
-              </div>
+              </label>
             </div>
-            <div className="flex gap-2">
-              <Button type="submit" disabled={addPortfolioSaving || !addPortfolioUrl.trim()}>
-                {addPortfolioSaving ? "Adding…" : "Add from URL"}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setShowAddPortfolioSheet(false)}>
-                Cancel
-              </Button>
-            </div>
-          </form>
+
+            <Button variant="outline" className="w-full" onClick={() => setShowAddPortfolioSheet(false)}>
+              Cancel
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Create Post Sheet */}
+      <Sheet open={showCreatePostSheet} onOpenChange={setShowCreatePostSheet}>
+        <SheetContent side="bottom" className="h-[60vh] rounded-t-2xl">
+          <SheetHeader>
+            <SheetTitle>Create Post</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-muted-foreground/30 rounded-xl cursor-pointer hover:border-muted-foreground/50 transition-colors overflow-hidden">
+              {newPostImage ? (
+                <img src={newPostImage} alt="Preview" className="w-full h-full object-cover" />
+              ) : (
+                <div className="text-center">
+                  <Camera className="w-10 h-10 mx-auto text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground mt-2">Tap to upload photo</p>
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  const formData = new FormData()
+                  formData.append("file", file)
+                  formData.append("type", "post")
+                  const res = await fetch("/api/media/upload", { method: "POST", credentials: "include", body: formData })
+                  if (res.ok) {
+                    const data = await res.json()
+                    setNewPostImage(data.url || "")
+                  }
+                }}
+              />
+            </label>
+            <Input
+              placeholder="Write a caption..."
+              value={newPostCaption}
+              onChange={(e) => setNewPostCaption(e.target.value)}
+              maxLength={500}
+            />
+            <Button
+              className="w-full h-12"
+              disabled={!newPostImage.trim() || postCreating}
+              onClick={async () => {
+                setPostCreating(true)
+                const res = await api.createPost({ imageUrl: newPostImage.trim(), caption: newPostCaption.trim() || undefined })
+                setPostCreating(false)
+                if (!res.error) {
+                  setShowCreatePostSheet(false)
+                  setNewPostImage("")
+                  setNewPostCaption("")
+                  fetchProfileData()
+                }
+              }}
+            >
+              {postCreating ? "Posting..." : "Post"}
+            </Button>
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -1213,6 +1405,7 @@ export function ProfileView({
         setError={setDetailsError}
         onSuccess={() => {
           setShowEditDetailsSheet(false)
+          fetchProfileData() // This refreshes measurements, portfolio, and posts
           onProfileUpdated?.()
         }}
       />
@@ -1378,26 +1571,26 @@ function EditDetailsSheet({
 
   useEffect(() => {
     if (!open) return
-    setHeightCm(user.measurements?.heightCm != null ? String(user.measurements.heightCm) : "")
+    setHeightCm(measurements?.heightCm != null ? String(measurements?.heightCm) : "")
     setBustCm(
-      user.measurements?.bust != null && user.measurements.bust !== ""
-        ? String(user.measurements.bust.replace(/\s*cm\s*/i, ""))
+      measurements?.bust != null && measurements?.bust !== ""
+        ? String(measurements?.bust.replace(/\s*cm\s*/i, ""))
         : "",
     )
     setWaistCm(
-      user.measurements?.waist != null && user.measurements.waist !== ""
-        ? String(user.measurements.waist.replace(/\s*cm\s*/i, ""))
+      measurements?.waist != null && measurements?.waist !== ""
+        ? String(measurements?.waist.replace(/\s*cm\s*/i, ""))
         : "",
     )
     setHipsCm(
-      user.measurements?.hips != null && user.measurements.hips !== ""
-        ? String(user.measurements.hips.replace(/\s*cm\s*/i, ""))
+      measurements?.hips != null && measurements?.hips !== ""
+        ? String(measurements?.hips.replace(/\s*cm\s*/i, ""))
         : "",
     )
-    setShoeSize(user.measurements?.shoeSize ?? "")
-    setDressSize(user.measurements?.dressSize ?? "")
-    setHair(user.measurements?.hairColor ?? "")
-    setEyes(user.measurements?.eyeColor ?? "")
+    setShoeSize(measurements?.shoeSize ?? "")
+    setDressSize(measurements?.dressSize ?? "")
+    setHair(measurements?.hairColor ?? "")
+    setEyes(measurements?.eyeColor ?? "")
     setSkinTone(user.skinTone ?? "")
     setLanguagesStr(Array.isArray(user.languages) ? user.languages.join(", ") : "")
     setExperienceStr(Array.isArray(user.experience) ? user.experience.join(", ") : "")

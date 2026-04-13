@@ -14,6 +14,8 @@ import {
   MoreVertical,
   CheckCheck,
   ImageIcon,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -21,6 +23,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import type { CastingRoom, RoomEvent, User } from "@/lib/types"
 import { api } from "@/lib/api-client"
 import { useAuth } from "@/lib/auth-context"
@@ -104,6 +107,24 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
   const [messages, setMessages] = useState<ApiRoomMessage[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Schedule calendar state
+  const [calYear, setCalYear] = useState(new Date().getFullYear())
+  const [calMonth, setCalMonth] = useState(new Date().getMonth())
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [showScheduleForm, setShowScheduleForm] = useState(false)
+  const [scheduleTitle, setScheduleTitle] = useState("")
+  const [scheduleDate, setScheduleDate] = useState("")
+  const [scheduleTime, setScheduleTime] = useState("")
+  const [pickerHour, setPickerHour] = useState(9)
+  const [pickerMinute, setPickerMinute] = useState(0)
+  const [pickerPeriod, setPickerPeriod] = useState<"AM" | "PM">("AM")
+  const [scheduleLocation, setScheduleLocation] = useState("")
+  const [scheduleNotes, setScheduleNotes] = useState("")
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+
+  // File upload state
+  const [fileUploading, setFileUploading] = useState(false)
+
   const fetchEvents = useCallback(async () => {
     const res = await api.getRoomEvents(room.id)
     const data = res.data as { events?: ApiRoomEvent[] } | undefined
@@ -176,6 +197,52 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
     if (data?.message) {
       setMessages((prev) => [...prev, data.message!])
     }
+  }
+
+  // Poll for new messages every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchMessages, 5000)
+    return () => clearInterval(interval)
+  }, [fetchMessages])
+
+  const handleAddScheduleItem = async () => {
+    if (!scheduleTitle || !scheduleDate) return
+    const timeStr = `${pickerHour}:${String(pickerMinute).padStart(2, "0")} ${pickerPeriod}`
+    setScheduleSaving(true)
+    await api.addRoomScheduleItem(room.id, {
+      title: scheduleTitle,
+      date: scheduleDate,
+      time: timeStr,
+      location: scheduleLocation || undefined,
+      notes: scheduleNotes || undefined,
+    })
+    setScheduleSaving(false)
+    setShowScheduleForm(false)
+    setScheduleTitle("")
+    setScheduleDate("")
+    setScheduleTime("")
+    setScheduleLocation("")
+    setScheduleNotes("")
+    fetchSchedule()
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileUploading(true)
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("type", "casting_room")
+    const uploadRes = await fetch("/api/media/upload", { method: "POST", credentials: "include", body: formData })
+    if (uploadRes.ok) {
+      const data = await uploadRes.json()
+      if (data.url) {
+        const fileType = file.name.match(/\.(pdf|doc|docx)$/i) ? "contract" : file.type.startsWith("image/") ? "moodboard" : "other"
+        await api.uploadRoomFile(room.id, { name: file.name, type: fileType, url: data.url })
+        fetchFiles()
+      }
+    }
+    setFileUploading(false)
   }
 
   const getEventIcon = (type: RoomEvent["type"]) => {
@@ -284,7 +351,7 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent flex-1"
           >
             <Users className="w-4 h-4 mr-1" />
-            Shortlist
+            Members
           </TabsTrigger>
           <TabsTrigger
             value="chat"
@@ -340,7 +407,7 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
           </div>
         </TabsContent>
 
-        {/* Shortlist */}
+        {/* Members (confirmed models only) */}
         <TabsContent value="shortlist" className="flex-1 overflow-auto mt-0 p-4">
           <div className="space-y-2">
             {room.members
@@ -359,15 +426,15 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
                     <p className="font-medium text-sm truncate">{model.name}</p>
                     <p className="text-xs text-muted-foreground">{model.location}</p>
                   </div>
-                  <Badge variant="secondary" className="text-[10px]">
-                    Shortlisted
+                  <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-500">
+                    Confirmed
                   </Badge>
                 </Card>
               ))}
             {room.members.filter((m) => m.role === "model").length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
                 <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>No models shortlisted yet</p>
+                <p>No confirmed models yet</p>
               </div>
             )}
           </div>
@@ -423,6 +490,24 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
         {/* Files */}
         <TabsContent value="files" className="flex-1 overflow-auto mt-0 p-4">
           <div className="space-y-2">
+            {/* Upload button */}
+            <label className="block cursor-pointer">
+              <Card className="p-3 flex items-center gap-3 border-dashed border-2 hover:bg-muted/30 transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                  {fileUploading ? (
+                    <div className="w-5 h-5 border-2 border-muted-foreground border-t-foreground rounded-full animate-spin" />
+                  ) : (
+                    <Paperclip className="w-5 h-5" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{fileUploading ? "Uploading..." : "Upload File"}</p>
+                  <p className="text-xs text-muted-foreground">Contracts, moodboards, call sheets</p>
+                </div>
+              </Card>
+              <input type="file" className="hidden" disabled={fileUploading} onChange={handleFileUpload} />
+            </label>
+
             {files.map((file) => (
               <Card key={file.id} className="p-3 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
@@ -440,40 +525,199 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
               </Card>
             ))}
             {files.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">
-                <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <div className="text-center py-8 text-muted-foreground text-sm">
                 <p>No files uploaded yet</p>
               </div>
             )}
           </div>
         </TabsContent>
 
-        {/* Schedule */}
-        <TabsContent value="schedule" className="flex-1 overflow-auto mt-0 p-4">
-          <div className="space-y-3">
-            {schedule.map((item) => (
-              <Card key={item.id} className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-lg bg-muted flex flex-col items-center justify-center shrink-0">
-                    <span className="text-lg font-bold">{format(new Date(item.date), "d")}</span>
-                    <span className="text-[10px] text-muted-foreground uppercase">{format(new Date(item.date), "MMM")}</span>
+        {/* Schedule — Calendar View */}
+        <TabsContent value="schedule" className="flex-1 overflow-auto mt-0 p-3">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-3">
+            <Button variant="ghost" size="icon" onClick={() => {
+              if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1) }
+              else setCalMonth(calMonth - 1)
+            }}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <h3 className="font-semibold text-sm">
+              {new Date(calYear, calMonth).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </h3>
+            <Button variant="ghost" size="icon" onClick={() => {
+              if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1) }
+              else setCalMonth(calMonth + 1)
+            }}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Day headers */}
+          <div className="grid grid-cols-7 text-center mb-1">
+            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+              <span key={d} className="text-[10px] text-muted-foreground font-medium py-1">{d}</span>
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div className="grid grid-cols-7 gap-0.5 mb-4">
+            {(() => {
+              const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate()
+              const firstDay = new Date(calYear, calMonth, 1).getDay()
+              const cells = []
+              // Empty cells before first day
+              for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />)
+              // Day cells
+              for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+                const dayEvents = schedule.filter((s) => s.date === dateStr)
+                const isSelected = selectedDate === dateStr
+                const isToday = dateStr === format(new Date(), "yyyy-MM-dd")
+                cells.push(
+                  <div key={day} className="relative group">
+                    <button
+                      onClick={() => {
+                        setSelectedDate(isSelected ? null : dateStr)
+                        setShowScheduleForm(false)
+                      }}
+                      className={`w-full aspect-square rounded-lg flex flex-col items-center justify-center text-sm relative transition-colors ${
+                        isSelected ? "bg-foreground text-background" :
+                        isToday ? "bg-muted ring-1 ring-foreground/30" :
+                        "hover:bg-muted/50"
+                      }`}
+                    >
+                      <span className="font-medium">{day}</span>
+                      {dayEvents.length > 0 && (
+                        <div className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? "bg-background" : "bg-violet-500"}`} />
+                      )}
+                    </button>
+                    {/* Hover: small "+ Add" button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedDate(dateStr)
+                        setScheduleDate(dateStr)
+                        setShowScheduleForm(true)
+                      }}
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-500 text-white text-[8px] font-bold items-center justify-center hidden group-hover:flex z-10 shadow"
+                    >
+                      +
+                    </button>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium">{item.title}</p>
-                    <p className="text-sm text-muted-foreground">{item.time}</p>
-                    {item.location && <p className="text-xs text-muted-foreground mt-1">{item.location}</p>}
-                    {item.notes && <p className="text-xs text-muted-foreground mt-2">{item.notes}</p>}
+                )
+              }
+              return cells
+            })()}
+          </div>
+
+          {/* Existing events for selected date shown below calendar */}
+          {selectedDate && schedule.filter((s) => s.date === selectedDate).length > 0 && (
+            <div className="space-y-2 mt-2">
+              <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">
+                {format(new Date(selectedDate + "T00:00:00"), "EEEE, MMMM d")}
+              </h4>
+              {schedule.filter((s) => s.date === selectedDate).map((item) => (
+                <Card key={item.id} className="p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-1 h-full min-h-[40px] rounded-full bg-violet-500 shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.time}</p>
+                      {item.location && <p className="text-xs text-muted-foreground mt-1">📍 {item.location}</p>}
+                      {item.notes && <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {!selectedDate && (
+            <p className="text-center text-sm text-muted-foreground py-4">Tap a date to add an event</p>
+          )}
+
+          {/* Add event — centered popup dialog */}
+          {showScheduleForm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowScheduleForm(false)}>
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="relative w-full max-w-sm bg-background rounded-2xl p-5 shadow-2xl border border-border"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="font-semibold text-base mb-4">
+                  {selectedDate ? format(new Date(selectedDate + "T00:00:00"), "EEEE, MMMM d") : "Add Event"}
+                </h3>
+                <div className="space-y-3">
+                  <Input
+                    placeholder="Title (e.g. Fitting, Shoot Day 1)"
+                    value={scheduleTitle}
+                    onChange={(e) => setScheduleTitle(e.target.value)}
+                    autoFocus
+                  />
+                  {/* Scroll time picker */}
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-2 block">Time</label>
+                    <div className="flex items-center justify-center gap-1 bg-muted/50 rounded-xl p-3">
+                      {/* Hour */}
+                      <div className="flex flex-col items-center">
+                        <button onClick={() => setPickerHour(h => h >= 12 ? 1 : h + 1)} className="p-1 text-muted-foreground hover:text-foreground">
+                          <ChevronLeft className="w-4 h-4 rotate-90" />
+                        </button>
+                        <span className="text-2xl font-bold w-10 text-center">{pickerHour}</span>
+                        <button onClick={() => setPickerHour(h => h <= 1 ? 12 : h - 1)} className="p-1 text-muted-foreground hover:text-foreground">
+                          <ChevronRight className="w-4 h-4 rotate-90" />
+                        </button>
+                      </div>
+
+                      <span className="text-2xl font-bold">:</span>
+
+                      {/* Minute */}
+                      <div className="flex flex-col items-center">
+                        <button onClick={() => setPickerMinute(m => m >= 55 ? 0 : m + 5)} className="p-1 text-muted-foreground hover:text-foreground">
+                          <ChevronLeft className="w-4 h-4 rotate-90" />
+                        </button>
+                        <span className="text-2xl font-bold w-10 text-center">{String(pickerMinute).padStart(2, "0")}</span>
+                        <button onClick={() => setPickerMinute(m => m <= 0 ? 55 : m - 5)} className="p-1 text-muted-foreground hover:text-foreground">
+                          <ChevronRight className="w-4 h-4 rotate-90" />
+                        </button>
+                      </div>
+
+                      {/* AM/PM */}
+                      <div className="flex flex-col items-center ml-2">
+                        <button
+                          onClick={() => setPickerPeriod(p => p === "AM" ? "PM" : "AM")}
+                          className="px-3 py-1 rounded-lg bg-foreground/10 text-sm font-semibold hover:bg-foreground/20 transition-colors"
+                        >
+                          {pickerPeriod}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <Input
+                    placeholder="Location (optional)"
+                    value={scheduleLocation}
+                    onChange={(e) => setScheduleLocation(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Notes (optional)"
+                    value={scheduleNotes}
+                    onChange={(e) => setScheduleNotes(e.target.value)}
+                  />
+                  <div className="flex gap-2 pt-1">
+                    <Button variant="outline" className="flex-1" onClick={() => setShowScheduleForm(false)}>Cancel</Button>
+                    <Button className="flex-1" onClick={handleAddScheduleItem} disabled={scheduleSaving || !scheduleTitle}>
+                      {scheduleSaving ? "Saving..." : "Add Event"}
+                    </Button>
                   </div>
                 </div>
-              </Card>
-            ))}
-            {schedule.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">
-                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>No events scheduled yet</p>
-              </div>
-            )}
-          </div>
+              </motion.div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
