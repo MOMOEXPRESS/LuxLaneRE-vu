@@ -115,6 +115,9 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
   const [scheduleTitle, setScheduleTitle] = useState("")
   const [scheduleDate, setScheduleDate] = useState("")
   const [scheduleTime, setScheduleTime] = useState("")
+  const [pickerHour, setPickerHour] = useState(9)
+  const [pickerMinute, setPickerMinute] = useState(0)
+  const [pickerPeriod, setPickerPeriod] = useState<"AM" | "PM">("AM")
   const [scheduleLocation, setScheduleLocation] = useState("")
   const [scheduleNotes, setScheduleNotes] = useState("")
   const [scheduleSaving, setScheduleSaving] = useState(false)
@@ -203,12 +206,13 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
   }, [fetchMessages])
 
   const handleAddScheduleItem = async () => {
-    if (!scheduleTitle || !scheduleDate || !scheduleTime) return
+    if (!scheduleTitle || !scheduleDate) return
+    const timeStr = `${pickerHour}:${String(pickerMinute).padStart(2, "0")} ${pickerPeriod}`
     setScheduleSaving(true)
     await api.addRoomScheduleItem(room.id, {
       title: scheduleTitle,
       date: scheduleDate,
-      time: scheduleTime,
+      time: timeStr,
       location: scheduleLocation || undefined,
       notes: scheduleNotes || undefined,
     })
@@ -643,13 +647,44 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
                     onChange={(e) => setScheduleTitle(e.target.value)}
                     autoFocus
                   />
+                  {/* Scroll time picker */}
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Time</label>
-                    <Input
-                      type="time"
-                      value={scheduleTime}
-                      onChange={(e) => setScheduleTime(e.target.value)}
-                    />
+                    <label className="text-xs text-muted-foreground mb-2 block">Time</label>
+                    <div className="flex items-center justify-center gap-1 bg-muted/50 rounded-xl p-3">
+                      {/* Hour */}
+                      <div className="flex flex-col items-center">
+                        <button onClick={() => setPickerHour(h => h >= 12 ? 1 : h + 1)} className="p-1 text-muted-foreground hover:text-foreground">
+                          <ChevronLeft className="w-4 h-4 rotate-90" />
+                        </button>
+                        <span className="text-2xl font-bold w-10 text-center">{pickerHour}</span>
+                        <button onClick={() => setPickerHour(h => h <= 1 ? 12 : h - 1)} className="p-1 text-muted-foreground hover:text-foreground">
+                          <ChevronRight className="w-4 h-4 rotate-90" />
+                        </button>
+                      </div>
+
+                      <span className="text-2xl font-bold">:</span>
+
+                      {/* Minute */}
+                      <div className="flex flex-col items-center">
+                        <button onClick={() => setPickerMinute(m => m >= 55 ? 0 : m + 5)} className="p-1 text-muted-foreground hover:text-foreground">
+                          <ChevronLeft className="w-4 h-4 rotate-90" />
+                        </button>
+                        <span className="text-2xl font-bold w-10 text-center">{String(pickerMinute).padStart(2, "0")}</span>
+                        <button onClick={() => setPickerMinute(m => m <= 0 ? 55 : m - 5)} className="p-1 text-muted-foreground hover:text-foreground">
+                          <ChevronRight className="w-4 h-4 rotate-90" />
+                        </button>
+                      </div>
+
+                      {/* AM/PM */}
+                      <div className="flex flex-col items-center ml-2">
+                        <button
+                          onClick={() => setPickerPeriod(p => p === "AM" ? "PM" : "AM")}
+                          className="px-3 py-1 rounded-lg bg-foreground/10 text-sm font-semibold hover:bg-foreground/20 transition-colors"
+                        >
+                          {pickerPeriod}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <Input
                     placeholder="Location (optional)"
@@ -663,7 +698,7 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
                   />
                   <div className="flex gap-2 pt-1">
                     <Button variant="outline" className="flex-1" onClick={() => setShowScheduleForm(false)}>Cancel</Button>
-                    <Button className="flex-1" onClick={handleAddScheduleItem} disabled={scheduleSaving || !scheduleTitle || !scheduleTime}>
+                    <Button className="flex-1" onClick={handleAddScheduleItem} disabled={scheduleSaving || !scheduleTitle}>
                       {scheduleSaving ? "Saving..." : "Add Event"}
                     </Button>
                   </div>
