@@ -37,15 +37,19 @@ interface InboxViewProps {
   onViewProfile?: (user: import("@/lib/types").User) => void
   initialConversationId?: string | null
   onConversationOpened?: () => void
+  onOpenCastingRoom?: (castingId: string) => void
+  onNavigateToTab?: (tab: string) => void
 }
 
 function mapApiConversationToConversation(apiConv: {
   id: string
   type: string
+  castingTitle?: string | null
+  castingId?: string | null
   members: Array<{ id: string; displayName?: string; avatarUrl?: string | null; username: string }>
   lastMessage: { id: string; content: string; senderId: string; createdAt: string } | null
   unreadCount: number
-}): Conversation {
+}): Conversation & { castingTitle?: string | null; castingId?: string | null } {
   const participants: UserType[] = apiConv.members.map((m) => ({
     id: m.id,
     name: m.displayName ?? m.username,
@@ -82,7 +86,9 @@ function mapApiConversationToConversation(apiConv: {
       }
   return {
     id: apiConv.id,
-    type: apiConv.type as Conversation["type"],
+    type: (apiConv.type === "casting_room" ? "casting" : apiConv.type) as Conversation["type"],
+    castingTitle: apiConv.castingTitle,
+    castingId: apiConv.castingId,
     participants,
     lastMessage,
     unreadCount: apiConv.unreadCount,
@@ -90,7 +96,7 @@ function mapApiConversationToConversation(apiConv: {
   }
 }
 
-export function InboxView({ onViewProfile, initialConversationId, onConversationOpened }: InboxViewProps = {}) {
+export function InboxView({ onViewProfile, initialConversationId, onConversationOpened, onOpenCastingRoom, onNavigateToTab }: InboxViewProps = {}) {
   const { user } = useAuth()
   const { conversations: apiConversations, isLoading: conversationsLoading, refresh: refreshConversations } = useConversations()
   const { notifications: apiNotifications, unreadCount, refresh: refreshNotifications } = useNotifications()
@@ -173,7 +179,7 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
               : "border-transparent text-muted-foreground"
           }`}
         >
-          Bookings
+          {user?.role === "brand" || user?.role === "agency" || user?.role === "client" ? "Castings" : "Bookings"}
           {bookingApplications.length > 0 && (
             <span className="absolute top-2 ml-1 px-1.5 py-0.5 text-[10px] bg-foreground text-background rounded-full">
               {bookingApplications.length}
@@ -209,7 +215,13 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
                     key={conversation.id}
                     conversation={conversation}
                     currentUserId={user?.id || ""}
-                    onClick={() => setSelectedConversation(conversation)}
+                    onClick={() => {
+                      if (conversation.type === "casting" && conversation.castingId && onOpenCastingRoom) {
+                        onOpenCastingRoom(conversation.castingId)
+                      } else {
+                        setSelectedConversation(conversation)
+                      }
+                    }}
                   />
                 ))}
               </div>
@@ -283,7 +295,7 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
               <div className="space-y-3">
                 {offeredApplications.length > 0 && <h3 className="text-sm font-medium text-muted-foreground mb-2">Bookings</h3>}
                 {bookingApplications.map((application) => (
-                  <BookingCard key={application.id} application={application} />
+                  <BookingCard key={application.id} application={application} onOpenCastingRoom={onOpenCastingRoom} />
                 ))}
               </div>
             ) : offeredApplications.length === 0 ? (
@@ -320,6 +332,7 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
                     key={notification.id}
                     notification={notification}
                     onRead={() => handleMarkOneRead(notification.id)}
+                    onNavigate={(tab) => setActiveTab(tab as InboxTab)}
                     onAgencyRespond={async (applicationId, action) => {
                       await api.respondToAgencyApplication(applicationId, action)
                       refreshNotifications()
@@ -340,7 +353,7 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
   )
 }
 
-function NotificationItem({ notification, onRead, onAgencyRespond }: { notification: Notification; onRead: () => void; onAgencyRespond?: (applicationId: string, action: "accept" | "reject") => void }) {
+function NotificationItem({ notification, onRead, onAgencyRespond, onNavigate }: { notification: Notification; onRead: () => void; onAgencyRespond?: (applicationId: string, action: "accept" | "reject") => void; onNavigate?: (tab: string) => void }) {
   const [responding, setResponding] = useState(false)
   const isAgencyInvite = notification.metadata?.relatedType === "agency_application" && notification.metadata?.relatedId
 
@@ -366,7 +379,16 @@ function NotificationItem({ notification, onRead, onAgencyRespond }: { notificat
   return (
     <Card
       className={`p-4 cursor-pointer transition-colors ${!notification.read ? "bg-muted/50 border-foreground/20" : ""}`}
-      onClick={onRead}
+      onClick={() => {
+        onRead()
+        // Navigate based on notification type
+        if (onNavigate) {
+          const type = notification.type
+          if (type === "shortlisted" || type === "offer" || type === "accepted" || notification.title?.includes("confirmed")) {
+            onNavigate("bookings")
+          }
+        }
+      }}
     >
       <div className="flex items-start gap-3">
         <div className={`p-2 rounded-full ${!notification.read ? "bg-foreground/10" : "bg-muted"}`}>{getIcon()}</div>
@@ -387,7 +409,7 @@ function NotificationItem({ notification, onRead, onAgencyRespond }: { notificat
                 onClick={(e) => {
                   e.stopPropagation()
                   setResponding(true)
-                  onAgencyRespond(notification.metadata.relatedId, "reject")
+                  onAgencyRespond(notification.metadata!.relatedId!, "reject")
                 }}
               >
                 <X className="w-3 h-3 mr-1" /> Decline
@@ -398,7 +420,7 @@ function NotificationItem({ notification, onRead, onAgencyRespond }: { notificat
                 onClick={(e) => {
                   e.stopPropagation()
                   setResponding(true)
-                  onAgencyRespond(notification.metadata.relatedId, "accept")
+                  onAgencyRespond(notification.metadata!.relatedId!, "accept")
                 }}
               >
                 <Check className="w-3 h-3 mr-1" /> Accept
@@ -420,11 +442,14 @@ function ConversationItem({
   currentUserId,
   onClick,
 }: {
-  conversation: Conversation
+  conversation: Conversation & { castingTitle?: string | null; castingId?: string | null }
   currentUserId: string
   onClick: () => void
 }) {
+  const isCastingRoom = conversation.type === "casting"
   const otherUser = conversation.participants.find((p) => p.id !== currentUserId) || conversation.participants[0]
+
+  if (!otherUser && !isCastingRoom) return null
 
   const formatMessageTime = (date: Date) => {
     if (isToday(date)) return format(date, "HH:mm")
@@ -439,8 +464,17 @@ function ConversationItem({
     >
       <div className="relative">
         <Avatar className="w-12 h-12">
-          <AvatarImage src={otherUser.avatar || "/placeholder.svg"} alt={otherUser.name} />
-          <AvatarFallback>{otherUser.name[0]}</AvatarFallback>
+          {isCastingRoom ? (
+            <>
+              <AvatarImage src="/placeholder.svg" />
+              <AvatarFallback className="bg-violet-600 text-white text-xs">CR</AvatarFallback>
+            </>
+          ) : (
+            <>
+              <AvatarImage src={otherUser?.avatar || "/placeholder.svg"} alt={otherUser?.name} />
+              <AvatarFallback>{otherUser?.name?.[0]}</AvatarFallback>
+            </>
+          )}
         </Avatar>
         {conversation.unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 w-5 h-5 bg-foreground text-background text-xs font-medium rounded-full flex items-center justify-center">
@@ -452,9 +486,10 @@ function ConversationItem({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1">
             <span className={`font-medium truncate ${conversation.unreadCount > 0 ? "" : "text-muted-foreground"}`}>
-              {otherUser.name}
+              {isCastingRoom ? (conversation as any).castingTitle || "Casting Room" : otherUser?.name || "Unknown"}
             </span>
-            {otherUser.verified && <BadgeCheck className="w-4 h-4 text-foreground shrink-0" />}
+            {isCastingRoom && <Badge variant="secondary" className="text-[9px] ml-1 shrink-0">Room</Badge>}
+            {!isCastingRoom && otherUser?.verified && <BadgeCheck className="w-4 h-4 text-foreground shrink-0" />}
           </div>
           <span className="text-xs text-muted-foreground shrink-0">
             {conversation.lastMessage.id
@@ -633,7 +668,7 @@ function ChatView({
   )
 }
 
-function BookingCard({ application }: { application: CastingApplication }) {
+function BookingCard({ application, onOpenCastingRoom }: { application: CastingApplication; onOpenCastingRoom?: (castingId: string) => void }) {
   const statusColors: Record<string, string> = {
     accepted: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
     confirmed: "bg-green-500/10 text-green-600 border-green-500/20",
@@ -678,6 +713,20 @@ function BookingCard({ application }: { application: CastingApplication }) {
           </span>
         )}
       </div>
+      {/* Status-specific messages */}
+      {application.status === "accepted" && (
+        <p className="text-xs text-amber-400 mt-1">Awaiting brand confirmation</p>
+      )}
+      {application.status === "confirmed" && onOpenCastingRoom && (
+        <Button
+          size="sm"
+          className="w-full mt-2"
+          onClick={() => onOpenCastingRoom(application.castingId)}
+        >
+          <MessageSquare className="w-4 h-4 mr-1" />
+          Enter Casting Room
+        </Button>
+      )}
     </Card>
   )
 }

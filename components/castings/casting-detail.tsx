@@ -56,6 +56,7 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
   const [applyStep, setApplyStep] = useState(1)
   const [applicationMessage, setApplicationMessage] = useState("")
   const [selectedPortfolio, setSelectedPortfolio] = useState<string[]>([])
+  const [dbPortfolioImages, setDbPortfolioImages] = useState<string[]>([])
   const [showAiMatches, setShowAiMatches] = useState(false)
   const [submissionStatus, setSubmissionStatus] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -335,6 +336,19 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
     if (isModel) {
       if (hasApplied) {
         const statusInfo = getStatusDisplay(appliedStatus || "applied")
+        const statusMessage = (() => {
+          switch (appliedStatus) {
+            case "pending": case "applied": return "The casting director will review your application."
+            case "shortlisted": return "You've been shortlisted! Stay tuned for next steps."
+            case "offered": return "You've received an offer! Check Inbox → Bookings to respond."
+            case "accepted": return "You accepted the offer. Awaiting brand confirmation."
+            case "confirmed": return "Your booking is confirmed! Enter the casting room to coordinate."
+            case "declined": return "You declined this offer."
+            case "rejected": return "This casting wasn't a match. Keep applying!"
+            default: return "Your application is being processed."
+          }
+        })()
+
         return (
           <div className="space-y-2">
             <Card className={`p-4 border ${statusInfo.bgColor}`}>
@@ -342,20 +356,17 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                 <Check className={`w-5 h-5 ${statusInfo.color}`} />
                 <div className="flex-1">
                   <p className={`font-medium ${statusInfo.color}`}>{statusInfo.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {appliedStatus === "pending" || appliedStatus === "applied"
-                      ? "The casting director will review your application."
-                      : appliedStatus === "shortlisted"
-                        ? "You've been shortlisted! Stay tuned for next steps."
-                        : appliedStatus === "accepted"
-                          ? "Congratulations! Check your inbox for details."
-                          : appliedStatus === "rejected"
-                            ? "This casting wasn't a match. Keep applying!"
-                            : "Your application is being processed."}
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{statusMessage}</p>
                 </div>
               </div>
             </Card>
+            {/* Enter Casting Room button for confirmed bookings */}
+            {appliedStatus === "confirmed" && onOpenRoom && (
+              <Button className="w-full h-12" size="lg" onClick={onOpenRoom}>
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Enter Casting Room
+              </Button>
+            )}
           </div>
         )
       }
@@ -791,7 +802,15 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
 
       {/* Apply Sheet - Model */}
       {isModel && (
-        <Sheet open={showApplySheet} onOpenChange={setShowApplySheet}>
+        <Sheet open={showApplySheet} onOpenChange={(open) => {
+          setShowApplySheet(open)
+          if (open && user) {
+            api.getMedia(user.id, "PORTFOLIO").then((res) => {
+              const data = res.data as { media?: Array<{ url: string }> } | undefined
+              if (data?.media) setDbPortfolioImages(data.media.map((m) => m.url))
+            })
+          }
+        }}>
           <SheetContent side="bottom" className="h-[90vh] rounded-t-2xl overflow-y-auto">
             <SheetHeader>
               <SheetTitle>
@@ -874,12 +893,12 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                         <span className={user?.verified ? "" : "text-muted-foreground"}>Verified profile</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
-                        {(user?.portfolio?.length ?? 0) > 0 ? (
+                        {(dbPortfolioImages.length > 0 || (user?.portfolio?.length ?? 0) > 0) ? (
                           <Check className="w-4 h-4 text-emerald-500" />
                         ) : (
                           <AlertCircle className="w-4 h-4 text-amber-500" />
                         )}
-                        <span>Portfolio ({user?.portfolio?.length || 0} photos)</span>
+                        <span>Portfolio ({dbPortfolioImages.length || user?.portfolio?.length || 0} photos)</span>
                       </div>
                       {requiresDigitalTwin && (
                         <div className="flex items-center gap-2 text-sm">
@@ -907,7 +926,7 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                     Select photos to include with your application ({selectedPortfolio.length} selected)
                   </p>
                   <div className="grid grid-cols-3 gap-2">
-                    {(user?.portfolio || []).map((img, i) => (
+                    {(dbPortfolioImages.length > 0 ? dbPortfolioImages : user?.portfolio || []).map((img, i) => (
                       <button
                         key={i}
                         onClick={() => {
@@ -934,7 +953,7 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                       </button>
                     ))}
                   </div>
-                  {(user?.portfolio || []).length === 0 && (
+                  {dbPortfolioImages.length === 0 && (user?.portfolio || []).length === 0 && (
                     <p className="text-center text-muted-foreground text-sm py-4">
                       No portfolio photos yet. You can skip this step.
                     </p>

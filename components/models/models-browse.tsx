@@ -44,7 +44,30 @@ export function ModelsBrowse({ onViewProfile, onInviteToCasting, onMessage, onCo
   const [compareMode, setCompareMode] = useState(false)
   const [selectedForCompare, setSelectedForCompare] = useState<User[]>([])
   const [models, setModels] = useState<User[]>([])
+  const [savedModels, setSavedModels] = useState<User[]>([])
+  const [viewMode, setViewMode] = useState<"all" | "saved">("all")
   const [loading, setLoading] = useState(true)
+
+  const fetchSavedModels = useCallback(async () => {
+    const res = await api.getSavedModels()
+    const data = res.data as { savedModels?: any[] } | undefined
+    if (data?.savedModels) {
+      setSavedModels(data.savedModels.map((s: any) => ({
+        id: s.model?.id || s.modelId,
+        name: s.model?.displayName || s.model?.username || "Model",
+        username: s.model?.username || "",
+        email: "",
+        role: "model" as const,
+        avatar: s.model?.avatarUrl || "/placeholder.svg",
+        verified: false,
+        verificationLevel: "unverified" as const,
+        bio: s.model?.bio || "",
+        location: s.model?.location || "",
+        followers: 0, following: 0,
+        createdAt: new Date(),
+      })))
+    }
+  }, [])
 
   const fetchModels = useCallback(async () => {
     setLoading(true)
@@ -71,7 +94,7 @@ export function ModelsBrowse({ onViewProfile, onInviteToCasting, onMessage, onCo
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchModels() }, [fetchModels])
+  useEffect(() => { fetchModels(); fetchSavedModels() }, [fetchModels, fetchSavedModels])
 
   const filteredModels = models.filter((model) => {
     if (search) {
@@ -205,11 +228,29 @@ export function ModelsBrowse({ onViewProfile, onInviteToCasting, onMessage, onCo
         )}
       </div>
 
+      {/* All / Saved toggle */}
+      <div className="flex gap-2 px-4 pt-3">
+        <button
+          onClick={() => setViewMode("all")}
+          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${viewMode === "all" ? "bg-foreground text-background" : "bg-muted text-muted-foreground"}`}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setViewMode("saved")}
+          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${viewMode === "saved" ? "bg-foreground text-background" : "bg-muted text-muted-foreground"}`}
+        >
+          Saved {savedModels.length > 0 && `(${savedModels.length})`}
+        </button>
+      </div>
+
       {/* Results */}
       <div className="p-4">
-        <p className="text-sm text-muted-foreground mb-4">{sortedModels.length} models found</p>
+        <p className="text-sm text-muted-foreground mb-4">
+          {viewMode === "saved" ? `${savedModels.length} saved models` : `${sortedModels.length} models found`}
+        </p>
         <div className="grid grid-cols-2 gap-3">
-          {sortedModels.map((model, index) => {
+          {(viewMode === "saved" ? savedModels : sortedModels).map((model, index) => {
             const isSelected = selectedForCompare.find((m) => m.id === model.id)
             return (
               <motion.div

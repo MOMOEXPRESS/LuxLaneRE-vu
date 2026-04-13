@@ -46,10 +46,21 @@ export async function GET(request: NextRequest) {
           username: u.username,
         }))
 
+        // For casting rooms, fetch casting title
+        let castingTitle: string | null = null
+        if (conv.type === "casting_room" && conv.castingId) {
+          const casting = await prisma.casting.findUnique({
+            where: { id: conv.castingId },
+            select: { title: true },
+          })
+          castingTitle = casting?.title || null
+        }
+
         return {
           id: conv.id,
           type: conv.type,
           castingId: conv.castingId,
+          castingTitle,
           createdAt: conv.createdAt.toISOString(),
           members,
           lastMessage: lastMessage
