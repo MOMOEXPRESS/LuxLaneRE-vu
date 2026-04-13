@@ -118,6 +118,10 @@ export function ProfileView({
   }, [fetchProfileData])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState(0)
+  const [showCreatePostSheet, setShowCreatePostSheet] = useState(false)
+  const [newPostImage, setNewPostImage] = useState("")
+  const [newPostCaption, setNewPostCaption] = useState("")
+  const [postCreating, setPostCreating] = useState(false)
   const [showInviteSheet, setShowInviteSheet] = useState(false)
   const [showEditDetailsSheet, setShowEditDetailsSheet] = useState(false)
   const [detailsSaving, setDetailsSaving] = useState(false)
@@ -763,10 +767,7 @@ export function ProfileView({
                 {/* Floating add post button - same style as portfolio */}
                 {isOwn && (
                   <button
-                    onClick={() => {
-                      // Navigate to home and open create post
-                      window.dispatchEvent(new CustomEvent("luxlane:create-post"))
-                    }}
+                    onClick={() => setShowCreatePostSheet(true)}
                     className="absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-foreground text-background flex items-center justify-center shadow-lg hover:opacity-90 transition-opacity"
                   >
                     <Plus className="w-5 h-5" />
@@ -1223,6 +1224,67 @@ export function ProfileView({
 
             <Button variant="outline" className="w-full" onClick={() => setShowAddPortfolioSheet(false)}>
               Cancel
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Create Post Sheet */}
+      <Sheet open={showCreatePostSheet} onOpenChange={setShowCreatePostSheet}>
+        <SheetContent side="bottom" className="h-[60vh] rounded-t-2xl">
+          <SheetHeader>
+            <SheetTitle>Create Post</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-muted-foreground/30 rounded-xl cursor-pointer hover:border-muted-foreground/50 transition-colors overflow-hidden">
+              {newPostImage ? (
+                <img src={newPostImage} alt="Preview" className="w-full h-full object-cover" />
+              ) : (
+                <div className="text-center">
+                  <Camera className="w-10 h-10 mx-auto text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground mt-2">Tap to upload photo</p>
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  const formData = new FormData()
+                  formData.append("file", file)
+                  formData.append("type", "post")
+                  const res = await fetch("/api/media/upload", { method: "POST", credentials: "include", body: formData })
+                  if (res.ok) {
+                    const data = await res.json()
+                    setNewPostImage(data.url || "")
+                  }
+                }}
+              />
+            </label>
+            <Input
+              placeholder="Write a caption..."
+              value={newPostCaption}
+              onChange={(e) => setNewPostCaption(e.target.value)}
+              maxLength={500}
+            />
+            <Button
+              className="w-full h-12"
+              disabled={!newPostImage.trim() || postCreating}
+              onClick={async () => {
+                setPostCreating(true)
+                const res = await api.createPost({ imageUrl: newPostImage.trim(), caption: newPostCaption.trim() || undefined })
+                setPostCreating(false)
+                if (!res.error) {
+                  setShowCreatePostSheet(false)
+                  setNewPostImage("")
+                  setNewPostCaption("")
+                  fetchProfileData()
+                }
+              }}
+            >
+              {postCreating ? "Posting..." : "Post"}
             </Button>
           </div>
         </SheetContent>
