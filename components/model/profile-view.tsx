@@ -25,6 +25,7 @@ import {
   MapPin,
   Settings,
   Share2,
+  MessageCircle,
   Grid3X3,
   Calendar,
   Edit,
@@ -84,11 +85,12 @@ export function ProfileView({
   const [portfolioFilter, setPortfolioFilter] = useState<string>("all")
   const [dbPortfolio, setDbPortfolio] = useState<Array<{ id: string; url: string; type: string; meta?: any }>>([])
   const [dbPosts, setDbPosts] = useState<Array<{ id: string; imageUrl: string; caption?: string | null; createdAt: string }>>([])
+  const [liveMeasurements, setLiveMeasurements] = useState<typeof user.measurements | undefined>(undefined)
 
   // Resolve the user (prop or current auth user)
   const resolvedUserId = profileUser?.id || currentUser?.id
 
-  // Fetch portfolio + posts from DB on mount and after updates
+  // Fetch portfolio + posts + measurements from DB on mount and after updates
   const fetchProfileData = useCallback(async () => {
     if (!resolvedUserId) return
     // Portfolio
@@ -101,6 +103,13 @@ export function ProfileView({
     const postsData = postsRes.data as { posts?: Array<{ id: string; userId: string; imageUrl: string; caption?: string | null; createdAt: string }> } | undefined
     if (postsData?.posts) {
       setDbPosts(postsData.posts.filter((p) => p.userId === resolvedUserId))
+    }
+
+    // Refresh measurements from profile API
+    const profileRes = await api.getMyProfile()
+    const profileData = profileRes.data as { profile?: { measurements?: any } } | undefined
+    if (profileData?.profile?.measurements) {
+      setLiveMeasurements(profileData.profile.measurements)
     }
   }, [resolvedUserId])
 
@@ -146,6 +155,8 @@ export function ProfileView({
   const [deletingMedia, setDeletingMedia] = useState<string | null>(null)
 
   const user = profileUser || currentUser
+  // Use live measurements (from DB fetch) if available, otherwise fall back to user prop
+  const measurements = liveMeasurements || user?.measurements
   const isBrandOrAgency = currentUser?.role === "brand" || currentUser?.role === "agency"
 
   // Check block status + track profile view for non-own profiles
@@ -403,7 +414,7 @@ export function ProfileView({
         {/* Quick Stats Row - Model Specific */}
         {user.role === "model" && (
           <div className="flex gap-2 mt-4 overflow-x-auto pb-2 -mx-4 px-4">
-            {user.measurements?.height && (
+            {measurements?.height && (
               <Card className="flex-shrink-0 px-3 py-2 bg-muted/50">
                 <p className="text-xs text-muted-foreground">Height</p>
                 <p className="font-semibold text-sm">{user.measurements.height}</p>
@@ -673,18 +684,17 @@ export function ProfileView({
                 )}
 
                 {/* Portfolio Grid */}
-                <div className="grid grid-cols-3 gap-0.5 p-0.5">
+                <div className="relative">
+                  {/* Floating add button */}
                   {isOwn && user.role === "model" && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="aspect-[3/4] bg-muted border-2 border-dashed border-muted-foreground/30 rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:bg-muted/80 hover:border-muted-foreground/50 transition-colors"
+                    <button
                       onClick={() => setShowAddPortfolioSheet(true)}
+                      className="absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-foreground text-background flex items-center justify-center shadow-lg hover:opacity-90 transition-opacity"
                     >
-                      <Plus className="w-8 h-8" />
-                      <span className="text-xs font-medium">Add photo</span>
-                    </motion.button>
+                      <Plus className="w-5 h-5" />
+                    </button>
                   )}
+                <div className="grid grid-cols-3 gap-0.5 p-0.5">
                   {editingPortfolio ? (
                     // Edit mode: show portfolio items with delete buttons
                     portfolioItems.map((item, i) => (
@@ -738,29 +748,56 @@ export function ProfileView({
                       </motion.button>
                     ))
                   )}
-                  {allImages.length === 0 && !editingPortfolio && !(isOwn && user.role === "model") && (
-                    <div className="col-span-3 py-12 text-center text-muted-foreground">No portfolio images yet</div>
+                  {allImages.length === 0 && !editingPortfolio && (
+                    <div className="col-span-3 py-12 text-center text-muted-foreground">
+                      {isOwn ? "Tap + to add your first photo" : "No portfolio images yet"}
+                    </div>
                   )}
+                </div>
                 </div>
               </motion.div>
             )}
 
             {activeTab === "posts" && (
-              <motion.div key="posts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-4">
+              <motion.div key="posts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative">
+                {/* Floating add post button - same style as portfolio */}
+                {isOwn && (
+                  <button
+                    onClick={() => {
+                      // Navigate to home and open create post
+                      window.dispatchEvent(new CustomEvent("luxlane:create-post"))
+                    }}
+                    className="absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-foreground text-background flex items-center justify-center shadow-lg hover:opacity-90 transition-opacity"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                )}
                 {(dbPosts.length > 0 || (user.posts && user.posts.length > 0)) ? (
-                  <div className="grid grid-cols-3 gap-1">
+                  <div className="grid grid-cols-3 gap-0.5 p-0.5">
                     {(dbPosts.length > 0 ? dbPosts : user.posts || []).map((post) => (
-                      <div key={post.id} className="aspect-square bg-muted rounded-lg overflow-hidden">
+                      <button
+                        key={post.id}
+                        className="aspect-square bg-muted overflow-hidden relative group"
+                        onClick={() => {
+                          setLightboxImage(post.imageUrl)
+                          setLightboxIndex(0)
+                        }}
+                      >
                         <img
                           src={post.imageUrl || "/placeholder.svg"}
                           alt={post.caption ?? "Post"}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
                         />
-                      </div>
+                        {/* Hover overlay with like/comment counts */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white text-sm font-medium">
+                          <span className="flex items-center gap-1"><Heart className="w-4 h-4" /> {(post as any).likes ?? 0}</span>
+                          <span className="flex items-center gap-1"><MessageCircle className="w-4 h-4" /> {(post as any).comments ?? 0}</span>
+                        </div>
+                      </button>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12 text-muted-foreground">
+                  <div className="text-center py-12 text-muted-foreground px-4">
                     <Grid3X3 className="w-10 h-10 mx-auto mb-3 opacity-40" />
                     <p>No posts yet</p>
                     <p className="text-xs mt-1">Share your first moment</p>
@@ -820,43 +857,43 @@ export function ProfileView({
                     {/* Hair — top left */}
                     <div className="absolute -left-20 top-2 text-right w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Hair</p>
-                      <p className="text-xs font-semibold">{user.measurements?.hairColor || "—"}</p>
+                      <p className="text-xs font-semibold">{measurements?.hairColor || "—"}</p>
                     </div>
 
                     {/* Eyes — top right */}
                     <div className="absolute -right-20 top-2 text-left w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Eyes</p>
-                      <p className="text-xs font-semibold">{user.measurements?.eyeColor || "—"}</p>
+                      <p className="text-xs font-semibold">{measurements?.eyeColor || "—"}</p>
                     </div>
 
                     {/* Height — left, upper */}
                     <div className="absolute -left-20 top-[75px] text-right w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Height</p>
-                      <p className="text-sm font-bold text-foreground">{user.measurements?.height || "—"}</p>
+                      <p className="text-sm font-bold text-foreground">{measurements?.height || "—"}</p>
                     </div>
 
                     {/* Bust — right of chest */}
                     <div className="absolute -right-20 top-[90px] text-left w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Bust</p>
-                      <p className="text-xs font-semibold">{user.measurements?.bust || "—"}</p>
+                      <p className="text-xs font-semibold">{measurements?.bust || "—"}</p>
                     </div>
 
                     {/* Waist — left of waist */}
                     <div className="absolute -left-20 top-[130px] text-right w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Waist</p>
-                      <p className="text-xs font-semibold">{user.measurements?.waist || "—"}</p>
+                      <p className="text-xs font-semibold">{measurements?.waist || "—"}</p>
                     </div>
 
                     {/* Hips — right of hips */}
                     <div className="absolute -right-20 top-[165px] text-left w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Hips</p>
-                      <p className="text-xs font-semibold">{user.measurements?.hips || "—"}</p>
+                      <p className="text-xs font-semibold">{measurements?.hips || "—"}</p>
                     </div>
 
                     {/* Dress Size — left, lower */}
                     <div className="absolute -left-20 top-[200px] text-right w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Dress</p>
-                      <p className="text-xs font-semibold">{user.measurements?.dressSize || "—"}</p>
+                      <p className="text-xs font-semibold">{measurements?.dressSize || "—"}</p>
                     </div>
 
                     {/* Inseam/Leg — right, lower */}
@@ -868,7 +905,7 @@ export function ProfileView({
                     {/* Shoe Size — bottom */}
                     <div className="absolute left-1/2 -translate-x-1/2 bottom-0 text-center">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Shoes</p>
-                      <p className="text-xs font-semibold">{user.measurements?.shoeSize || "—"}</p>
+                      <p className="text-xs font-semibold">{measurements?.shoeSize || "—"}</p>
                     </div>
                   </div>
                 </div>
@@ -1255,6 +1292,7 @@ export function ProfileView({
         setError={setDetailsError}
         onSuccess={() => {
           setShowEditDetailsSheet(false)
+          fetchProfileData() // This refreshes measurements, portfolio, and posts
           onProfileUpdated?.()
         }}
       />
@@ -1420,26 +1458,26 @@ function EditDetailsSheet({
 
   useEffect(() => {
     if (!open) return
-    setHeightCm(user.measurements?.heightCm != null ? String(user.measurements.heightCm) : "")
+    setHeightCm(measurements?.heightCm != null ? String(user.measurements.heightCm) : "")
     setBustCm(
-      user.measurements?.bust != null && user.measurements.bust !== ""
+      measurements?.bust != null && user.measurements.bust !== ""
         ? String(user.measurements.bust.replace(/\s*cm\s*/i, ""))
         : "",
     )
     setWaistCm(
-      user.measurements?.waist != null && user.measurements.waist !== ""
+      measurements?.waist != null && user.measurements.waist !== ""
         ? String(user.measurements.waist.replace(/\s*cm\s*/i, ""))
         : "",
     )
     setHipsCm(
-      user.measurements?.hips != null && user.measurements.hips !== ""
+      measurements?.hips != null && user.measurements.hips !== ""
         ? String(user.measurements.hips.replace(/\s*cm\s*/i, ""))
         : "",
     )
-    setShoeSize(user.measurements?.shoeSize ?? "")
-    setDressSize(user.measurements?.dressSize ?? "")
-    setHair(user.measurements?.hairColor ?? "")
-    setEyes(user.measurements?.eyeColor ?? "")
+    setShoeSize(measurements?.shoeSize ?? "")
+    setDressSize(measurements?.dressSize ?? "")
+    setHair(measurements?.hairColor ?? "")
+    setEyes(measurements?.eyeColor ?? "")
     setSkinTone(user.skinTone ?? "")
     setLanguagesStr(Array.isArray(user.languages) ? user.languages.join(", ") : "")
     setExperienceStr(Array.isArray(user.experience) ? user.experience.join(", ") : "")
