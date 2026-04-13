@@ -421,14 +421,14 @@ export function ProfileView({
             {measurements?.height && (
               <Card className="flex-shrink-0 px-3 py-2 bg-muted/50">
                 <p className="text-xs text-muted-foreground">Height</p>
-                <p className="font-semibold text-sm">{user.measurements.height}</p>
+                <p className="font-semibold text-sm">{measurements?.height}</p>
               </Card>
             )}
-            {user.measurements && (
+            {measurements && (
               <Card className="flex-shrink-0 px-3 py-2 bg-muted/50">
                 <p className="text-xs text-muted-foreground">Measurements</p>
                 <p className="font-semibold text-sm">
-                  {user.measurements.bust}/{user.measurements.waist}/{user.measurements.hips}
+                  {measurements?.bust}/{measurements?.waist}/{measurements?.hips}
                 </p>
               </Card>
             )}
@@ -1520,20 +1520,20 @@ function EditDetailsSheet({
 
   useEffect(() => {
     if (!open) return
-    setHeightCm(measurements?.heightCm != null ? String(user.measurements.heightCm) : "")
+    setHeightCm(measurements?.heightCm != null ? String(measurements?.heightCm) : "")
     setBustCm(
-      measurements?.bust != null && user.measurements.bust !== ""
-        ? String(user.measurements.bust.replace(/\s*cm\s*/i, ""))
+      measurements?.bust != null && measurements?.bust !== ""
+        ? String(measurements?.bust.replace(/\s*cm\s*/i, ""))
         : "",
     )
     setWaistCm(
-      measurements?.waist != null && user.measurements.waist !== ""
-        ? String(user.measurements.waist.replace(/\s*cm\s*/i, ""))
+      measurements?.waist != null && measurements?.waist !== ""
+        ? String(measurements?.waist.replace(/\s*cm\s*/i, ""))
         : "",
     )
     setHipsCm(
-      measurements?.hips != null && user.measurements.hips !== ""
-        ? String(user.measurements.hips.replace(/\s*cm\s*/i, ""))
+      measurements?.hips != null && measurements?.hips !== ""
+        ? String(measurements?.hips.replace(/\s*cm\s*/i, ""))
         : "",
     )
     setShoeSize(measurements?.shoeSize ?? "")
