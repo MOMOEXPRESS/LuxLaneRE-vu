@@ -53,7 +53,7 @@ import {
 import { uploadAvatar } from "@/lib/upload"
 import { mockUsers } from "@/lib/mock-data"
 
-type ProfileTab = "portfolio" | "posts" | "details" | "availability" | "analytics" | "earnings"
+type ProfileTab = "portfolio" | "posts" | "details" | "availability"
 
 interface ProfileViewProps {
   user?: User
@@ -217,10 +217,6 @@ export function ProfileView({
     ...(hasPosts ? [{ id: "posts" as const, label: "Posts", icon: <Grid3X3 className="w-4 h-4" /> }] : []),
     { id: "details", label: "Details", icon: <Briefcase className="w-4 h-4" /> },
     { id: "availability", label: "Availability", icon: <Calendar className="w-4 h-4" /> },
-    ...(isOwn ? [
-      { id: "analytics" as const, label: "Analytics", icon: <TrendingUp className="w-4 h-4" /> },
-      { id: "earnings" as const, label: "Earnings", icon: <Star className="w-4 h-4" /> },
-    ] : []),
   ]
 
   const portfolioFilters = ["all", "runway", "editorial", "campaign", "commercial"]
@@ -585,19 +581,19 @@ export function ProfileView({
       {/* Tabs Navigation */}
       {user.role === "model" && (
         <>
-          <div className="flex border-b border-border sticky top-14 bg-background z-30">
+          <div className="flex justify-around border-b border-border sticky top-14 bg-background z-30 px-2">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 py-3 flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                className={`py-3 px-4 flex items-center justify-center gap-2 border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? "border-foreground text-foreground"
                     : "border-transparent text-muted-foreground"
                 }`}
               >
                 {tab.icon}
-                <span className="text-sm">{tab.label}</span>
+                <span className="text-sm font-medium">{tab.label}</span>
               </button>
             ))}
           </div>
@@ -750,59 +746,97 @@ export function ProfileView({
                     </Button>
                   </div>
                 )}
-                {/* Measurements Card */}
-                {user.measurements && (
-                  <Card className="p-4">
-                    <h3 className="font-semibold mb-3">Measurements</h3>
-                    <div className="grid grid-cols-3 gap-3 text-sm">
-                      <div>
-                        <p className="text-muted-foreground text-xs">Height</p>
-                        <p className="font-medium">{user.measurements.height}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Bust</p>
-                        <p className="font-medium">{user.measurements.bust}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Waist</p>
-                        <p className="font-medium">{user.measurements.waist}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Hips</p>
-                        <p className="font-medium">{user.measurements.hips}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Shoes</p>
-                        <p className="font-medium">{user.measurements.shoeSize}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Dress</p>
-                        <p className="font-medium">{user.measurements.dressSize || "—"}</p>
-                      </div>
-                    </div>
-                  </Card>
-                )}
 
-                {/* Physical Attributes */}
-                {user.measurements && (
-                  <Card className="p-4">
-                    <h3 className="font-semibold mb-3">Physical Attributes</h3>
-                    <div className="grid grid-cols-3 gap-3 text-sm">
-                      <div>
-                        <p className="text-muted-foreground text-xs">Hair</p>
-                        <p className="font-medium">{user.measurements.hairColor}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Eyes</p>
-                        <p className="font-medium">{user.measurements.eyeColor}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Skin Tone</p>
-                        <p className="font-medium">{user.skinTone || "—"}</p>
-                      </div>
+                {/* Human Silhouette with Measurements */}
+                <div className="relative flex justify-center py-4">
+                  {/* SVG Silhouette */}
+                  <div className="relative" style={{ width: 160, height: 340 }}>
+                    <svg viewBox="0 0 160 340" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {/* Head */}
+                      <circle cx="80" cy="30" r="22" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Neck */}
+                      <line x1="80" y1="52" x2="80" y2="65" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Shoulders */}
+                      <line x1="40" y1="75" x2="120" y2="75" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Torso */}
+                      <path d="M 40 75 L 45 140 L 55 160 L 105 160 L 115 140 L 120 75" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Waist line */}
+                      <line x1="50" y1="130" x2="110" y2="130" stroke="currentColor" strokeWidth="0.5" strokeDasharray="3 3" className="text-muted-foreground/20" />
+                      {/* Hips */}
+                      <path d="M 55 160 L 50 170 L 120 170 L 105 160" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Left leg */}
+                      <path d="M 55 170 L 50 260 L 48 310" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Right leg */}
+                      <path d="M 105 170 L 110 260 L 112 310" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Left arm */}
+                      <path d="M 40 75 L 25 130 L 20 160" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Right arm */}
+                      <path d="M 120 75 L 135 130 L 140 160" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      {/* Feet */}
+                      <line x1="42" y1="310" x2="55" y2="310" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                      <line x1="106" y1="310" x2="118" y2="310" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/40" />
+                    </svg>
+
+                    {/* Measurement labels positioned around the figure */}
+                    {/* Hair — top left */}
+                    <div className="absolute -left-20 top-2 text-right w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Hair</p>
+                      <p className="text-xs font-semibold">{user.measurements?.hairColor || "—"}</p>
                     </div>
-                  </Card>
-                )}
+
+                    {/* Eyes — top right */}
+                    <div className="absolute -right-20 top-2 text-left w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Eyes</p>
+                      <p className="text-xs font-semibold">{user.measurements?.eyeColor || "—"}</p>
+                    </div>
+
+                    {/* Height — far left, middle */}
+                    <div className="absolute -left-20 top-1/2 -translate-y-1/2 text-right w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Height</p>
+                      <p className="text-sm font-bold text-foreground">{user.measurements?.height || "—"}</p>
+                    </div>
+
+                    {/* Bust — right of chest */}
+                    <div className="absolute -right-20 top-[85px] text-left w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Bust</p>
+                      <p className="text-xs font-semibold">{user.measurements?.bust || "—"}</p>
+                    </div>
+
+                    {/* Waist — right of waist */}
+                    <div className="absolute -right-20 top-[130px] text-left w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Waist</p>
+                      <p className="text-xs font-semibold">{user.measurements?.waist || "—"}</p>
+                    </div>
+
+                    {/* Hips — left of hips */}
+                    <div className="absolute -left-20 top-[165px] text-right w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Hips</p>
+                      <p className="text-xs font-semibold">{user.measurements?.hips || "—"}</p>
+                    </div>
+
+                    {/* Shoe Size — bottom */}
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-0 text-center">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Shoes</p>
+                      <p className="text-xs font-semibold">{user.measurements?.shoeSize || "—"}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Info Cards */}
+                <div className="grid grid-cols-2 gap-3">
+                  {user.skinTone && (
+                    <Card className="p-3 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Skin Tone</p>
+                      <p className="text-sm font-medium mt-0.5">{user.skinTone}</p>
+                    </Card>
+                  )}
+                  {user.measurements?.dressSize && (
+                    <Card className="p-3 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Dress Size</p>
+                      <p className="text-sm font-medium mt-0.5">{user.measurements.dressSize}</p>
+                    </Card>
+                  )}
+                </div>
 
                 {/* Languages */}
                 {user.languages && user.languages.length > 0 && (
@@ -934,30 +968,6 @@ export function ProfileView({
             )}
 
             {/* Analytics tab — own profile only */}
-            {activeTab === "analytics" && isOwn && (
-              <motion.div
-                key="analytics"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="p-4"
-              >
-                <ProfileAnalytics />
-              </motion.div>
-            )}
-
-            {/* Earnings tab — own profile only */}
-            {activeTab === "earnings" && isOwn && (
-              <motion.div
-                key="earnings"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="p-4"
-              >
-                <EarningsDashboard />
-              </motion.div>
-            )}
           </AnimatePresence>
         </>
       )}
