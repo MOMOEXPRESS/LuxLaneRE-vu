@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api-client"
 import { useNavigation } from "@/lib/navigation-context"
 import { useNotifications } from "@/lib/hooks/use-notifications"
+import { useStore } from "@/lib/store-context"
 import type { User } from "@/lib/types"
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow"
 import { BottomNav } from "@/components/layout/bottom-nav"
@@ -47,6 +48,7 @@ export default function Home() {
   } = useNavigation()
 
   const { unreadCount } = useNotifications(true)
+  const { castings } = useStore()
   const [openConversationId, setOpenConversationId] = useState<string | null>(null)
 
   // Read URL params for tab and conversation
@@ -323,7 +325,33 @@ export default function Home() {
       case "roster":
         return <RosterView onViewProfile={viewProfile} />
       case "inbox":
-        return <InboxView onViewProfile={viewProfile} initialConversationId={openConversationId} onConversationOpened={() => setOpenConversationId(null)} />
+        return <InboxView
+          onViewProfile={viewProfile}
+          initialConversationId={openConversationId}
+          onConversationOpened={() => setOpenConversationId(null)}
+          onOpenCastingRoom={async (castingId) => {
+            // Fetch the casting room and navigate to it
+            const res = await api.getCastingRoom(castingId)
+            const data = res.data as { room?: { id: string; castingId: string; status: string; createdAt: string; members: Array<Record<string, unknown>> } } | undefined
+            if (data?.room) {
+              const casting = castings.find(c => c.id === castingId)
+              const room = {
+                id: data.room.id,
+                castingId: data.room.castingId,
+                casting: casting || { id: castingId, title: "Casting", creatorId: "", creator: { id: "", name: "Brand", username: "", avatar: "", role: "brand" as const, email: "", verified: false, verificationLevel: "unverified" as const, bio: "", location: "", followers: 0, following: 0, createdAt: new Date() }, type: "campaign" as const, description: "", location: "", dates: { start: new Date(), end: new Date() }, pay: { amount: 0, currency: "EUR", type: "flat" as const }, requirements: {}, deadline: new Date(), status: "active" as const, applicationsCount: 0, shortlistedCount: 0, createdAt: new Date() },
+                status: data.room.status as any,
+                members: (data.room.members || []).map((m: Record<string, unknown>) => ({
+                  id: m.id as string, email: "", name: (m.name as string) || "", username: (m.username as string) || "",
+                  role: "model" as const, verified: false, verificationLevel: "unverified" as const,
+                  avatar: (m.avatar as string) || "", bio: "", location: "", followers: 0, following: 0, createdAt: new Date(),
+                  portfolio: [], polaroids: [], experience: [], tags: [],
+                })),
+                createdAt: new Date(data.room.createdAt), updatedAt: new Date(data.room.createdAt),
+              }
+              navigateTo("casting-room", { room, casting: room.casting })
+            }
+          }}
+        />
       default:
         return null
     }

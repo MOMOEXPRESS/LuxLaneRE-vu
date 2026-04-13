@@ -61,15 +61,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       notificationTitle = "You're confirmed!"
       notificationBody = `Your booking for "${submission.casting.title}" has been confirmed`
 
-      // Auto-add model to casting room
+      // Auto-add model to casting room (uses Conversation model with type "casting_room")
       try {
-        // Find or create the casting room
-        let room = await prisma.castingRoom.findFirst({
-          where: { castingId: submission.castingId },
+        let room = await prisma.conversation.findFirst({
+          where: { type: "casting_room", castingId: submission.castingId },
         })
         if (!room) {
-          room = await prisma.castingRoom.create({
+          room = await prisma.conversation.create({
             data: {
+              type: "casting_room",
               castingId: submission.castingId,
               status: "active",
               members: { create: { userId: submission.casting.createdBy } },
@@ -77,17 +77,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           })
         }
         // Add model as member (skip if already member)
-        const existingMember = await prisma.castingRoomMember.findUnique({
-          where: { roomId_userId: { roomId: room.id, userId: submission.modelId } },
+        const existingMember = await prisma.conversationMember.findFirst({
+          where: { conversationId: room.id, userId: submission.modelId },
         })
         if (!existingMember) {
-          await prisma.castingRoomMember.create({
-            data: { roomId: room.id, userId: submission.modelId },
+          await prisma.conversationMember.create({
+            data: { conversationId: room.id, userId: submission.modelId },
           })
         }
       } catch (roomError) {
         console.error("Failed to add model to casting room:", roomError)
-        // Don't fail the status update if room creation fails
       }
     } else if (newStatus === "REJECTED") {
       notificationType = "SYSTEM"
