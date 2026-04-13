@@ -261,43 +261,35 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
             <SheetTitle>Create Post</SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-4">
+            {/* Upload photo */}
             <div>
-              <label className="text-sm font-medium text-muted-foreground mb-1 block">Image</label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Paste image URL or upload..."
-                  value={newPostImage}
-                  onChange={(e) => setNewPostImage(e.target.value)}
-                  className="flex-1"
-                />
-                <label className="cursor-pointer">
-                  <div className="h-10 px-3 rounded-md border border-input bg-background flex items-center gap-1 text-sm hover:bg-accent">
-                    <ImageIcon className="w-4 h-4" /> Upload
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      const formData = new FormData()
-                      formData.append("file", file)
-                      formData.append("type", "post")
-                      const res = await fetch("/api/media/upload", { method: "POST", credentials: "include", body: formData })
-                      if (res.ok) {
-                        const data = await res.json()
-                        setNewPostImage(data.url || "")
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-              {newPostImage && (
-                <div className="mt-2 aspect-square w-32 rounded-lg overflow-hidden bg-muted">
+              <label className="flex items-center justify-center w-full h-40 border-2 border-dashed border-muted-foreground/30 rounded-xl cursor-pointer hover:border-muted-foreground/50 transition-colors overflow-hidden">
+                {newPostImage ? (
                   <img src={newPostImage} alt="Preview" className="w-full h-full object-cover" />
-                </div>
-              )}
+                ) : (
+                  <div className="text-center">
+                    <ImageIcon className="w-10 h-10 mx-auto text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground mt-2">Tap to upload photo</p>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const formData = new FormData()
+                    formData.append("file", file)
+                    formData.append("type", "post")
+                    const res = await fetch("/api/media/upload", { method: "POST", credentials: "include", body: formData })
+                    if (res.ok) {
+                      const data = await res.json()
+                      setNewPostImage(data.url || "")
+                    }
+                  }}
+                />
+              </label>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground mb-1 block">Caption</label>

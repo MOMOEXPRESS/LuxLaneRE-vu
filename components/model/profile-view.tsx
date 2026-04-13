@@ -92,6 +92,7 @@ export function ProfileView({
   const [addPortfolioUrl, setAddPortfolioUrl] = useState("")
   const [addPortfolioSaving, setAddPortfolioSaving] = useState(false)
   const [addPortfolioError, setAddPortfolioError] = useState<string | null>(null)
+  const [portfolioCategory, setPortfolioCategory] = useState<string>("all")
 
   const [hasAppliedToAgency, setHasAppliedToAgency] = useState(false)
   const [showAgencyApplySheet, setShowAgencyApplySheet] = useState(false)
@@ -211,10 +212,9 @@ export function ProfileView({
     : []
   const canApplyToAgency = !isOwn && isAgency && currentUser?.role === "model"
 
-  const hasPosts = (user.posts?.length ?? 0) > 0
   const tabs: { id: ProfileTab; label: string; icon: React.ReactNode }[] = [
     { id: "portfolio", label: "Portfolio", icon: <Grid3X3 className="w-4 h-4" /> },
-    ...(hasPosts ? [{ id: "posts" as const, label: "Posts", icon: <Grid3X3 className="w-4 h-4" /> }] : []),
+    { id: "posts", label: "Posts", icon: <Grid3X3 className="w-4 h-4" /> },
     { id: "details", label: "Details", icon: <Briefcase className="w-4 h-4" /> },
     { id: "availability", label: "Availability", icon: <Calendar className="w-4 h-4" /> },
   ]
@@ -790,28 +790,40 @@ export function ProfileView({
                       <p className="text-xs font-semibold">{user.measurements?.eyeColor || "—"}</p>
                     </div>
 
-                    {/* Height — far left, middle */}
-                    <div className="absolute -left-20 top-1/2 -translate-y-1/2 text-right w-20">
+                    {/* Height — left, upper */}
+                    <div className="absolute -left-20 top-[75px] text-right w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Height</p>
                       <p className="text-sm font-bold text-foreground">{user.measurements?.height || "—"}</p>
                     </div>
 
                     {/* Bust — right of chest */}
-                    <div className="absolute -right-20 top-[85px] text-left w-20">
+                    <div className="absolute -right-20 top-[90px] text-left w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Bust</p>
                       <p className="text-xs font-semibold">{user.measurements?.bust || "—"}</p>
                     </div>
 
-                    {/* Waist — right of waist */}
-                    <div className="absolute -right-20 top-[130px] text-left w-20">
+                    {/* Waist — left of waist */}
+                    <div className="absolute -left-20 top-[130px] text-right w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Waist</p>
                       <p className="text-xs font-semibold">{user.measurements?.waist || "—"}</p>
                     </div>
 
-                    {/* Hips — left of hips */}
-                    <div className="absolute -left-20 top-[165px] text-right w-20">
+                    {/* Hips — right of hips */}
+                    <div className="absolute -right-20 top-[165px] text-left w-20">
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Hips</p>
                       <p className="text-xs font-semibold">{user.measurements?.hips || "—"}</p>
+                    </div>
+
+                    {/* Dress Size — left, lower */}
+                    <div className="absolute -left-20 top-[200px] text-right w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Dress</p>
+                      <p className="text-xs font-semibold">{user.measurements?.dressSize || "—"}</p>
+                    </div>
+
+                    {/* Inseam/Leg — right, lower */}
+                    <div className="absolute -right-20 top-[240px] text-left w-20">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Skin</p>
+                      <p className="text-xs font-semibold">{user.skinTone || "—"}</p>
                     </div>
 
                     {/* Shoe Size — bottom */}
@@ -820,22 +832,6 @@ export function ProfileView({
                       <p className="text-xs font-semibold">{user.measurements?.shoeSize || "—"}</p>
                     </div>
                   </div>
-                </div>
-
-                {/* Additional Info Cards */}
-                <div className="grid grid-cols-2 gap-3">
-                  {user.skinTone && (
-                    <Card className="p-3 text-center">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Skin Tone</p>
-                      <p className="text-sm font-medium mt-0.5">{user.skinTone}</p>
-                    </Card>
-                  )}
-                  {user.measurements?.dressSize && (
-                    <Card className="p-3 text-center">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Dress Size</p>
-                      <p className="text-sm font-medium mt-0.5">{user.measurements.dressSize}</p>
-                    </Card>
-                  )}
                 </div>
 
                 {/* Languages */}
@@ -1070,92 +1066,88 @@ export function ProfileView({
           <SheetHeader>
             <SheetTitle>Add portfolio photo</SheetTitle>
           </SheetHeader>
-          <form
-            className="mt-4 space-y-4"
-            onSubmit={async (e) => {
-              e.preventDefault()
-              const url = addPortfolioUrl.trim()
-              if (!url) return
-              setAddPortfolioError(null)
-              setAddPortfolioSaving(true)
-              const res = await api.addPortfolioImage(url)
-              setAddPortfolioSaving(false)
-              if (res.error) {
-                setAddPortfolioError(res.error)
-                return
-              }
-              setAddPortfolioUrl("")
-              setShowAddPortfolioSheet(false)
-              onProfileUpdated?.()
-            }}
-          >
+          <div className="mt-4 space-y-4">
             {addPortfolioError && (
               <p className="text-sm text-destructive bg-destructive/10 p-2 rounded">{addPortfolioError}</p>
             )}
-            <div className="space-y-3">
-              {/* File upload option */}
-              <div>
-                <Label className="text-sm font-medium">Upload from device</Label>
-                <label className="mt-1 flex items-center justify-center w-full h-24 border-2 border-dashed border-muted-foreground/30 rounded-xl cursor-pointer hover:border-muted-foreground/50 transition-colors">
-                  <div className="text-center">
-                    <Camera className="w-6 h-6 mx-auto text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground mt-1">Tap to choose photo</p>
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      setAddPortfolioSaving(true)
-                      const formData = new FormData()
-                      formData.append("file", file)
-                      formData.append("type", "portfolio")
+
+            {/* Category selector */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Category</Label>
+              <div className="flex gap-2 flex-wrap">
+                {["runway", "editorial", "campaign", "commercial"].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setPortfolioCategory(cat)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors capitalize ${
+                      portfolioCategory === cat
+                        ? "bg-foreground text-background"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Upload button */}
+            <div>
+              <label className="flex items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/30 rounded-xl cursor-pointer hover:border-muted-foreground/50 transition-colors">
+                <div className="text-center">
+                  {addPortfolioSaving ? (
+                    <>
+                      <div className="w-8 h-8 mx-auto border-2 border-muted-foreground border-t-foreground rounded-full animate-spin" />
+                      <p className="text-xs text-muted-foreground mt-2">Uploading...</p>
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="w-8 h-8 mx-auto text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground mt-2">Tap to upload photo</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">JPG, PNG up to 10MB</p>
+                    </>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={addPortfolioSaving}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setAddPortfolioSaving(true)
+                    setAddPortfolioError(null)
+                    const formData = new FormData()
+                    formData.append("file", file)
+                    formData.append("type", "portfolio")
+                    try {
                       const uploadRes = await fetch("/api/media/upload", { method: "POST", credentials: "include", body: formData })
                       if (uploadRes.ok) {
                         const data = await uploadRes.json()
-                        const url = data.url
-                        if (url) {
-                          await api.addPortfolioImage(url)
+                        if (data.url) {
+                          await api.confirmMedia({ url: data.url, type: "PORTFOLIO", meta: { category: portfolioCategory } })
                           setShowAddPortfolioSheet(false)
+                          setPortfolioCategory("all")
                           onProfileUpdated?.()
                         }
+                      } else {
+                        setAddPortfolioError("Upload failed. Try again.")
                       }
-                      setAddPortfolioSaving(false)
-                    }}
-                  />
-                </label>
-              </div>
-
-              {/* OR divider */}
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground">or</span>
-                <div className="flex-1 h-px bg-border" />
-              </div>
-
-              {/* URL option */}
-              <div className="space-y-2">
-                <Label htmlFor="portfolioUrl">Paste image URL</Label>
-                <Input
-                  id="portfolioUrl"
-                  type="url"
-                  placeholder="https://example.com/photo.jpg"
-                  value={addPortfolioUrl}
-                  onChange={(e) => setAddPortfolioUrl(e.target.value)}
+                    } catch {
+                      setAddPortfolioError("Something went wrong.")
+                    }
+                    setAddPortfolioSaving(false)
+                  }}
                 />
-              </div>
+              </label>
             </div>
-            <div className="flex gap-2">
-              <Button type="submit" disabled={addPortfolioSaving || !addPortfolioUrl.trim()}>
-                {addPortfolioSaving ? "Adding…" : "Add from URL"}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setShowAddPortfolioSheet(false)}>
-                Cancel
-              </Button>
-            </div>
-          </form>
+
+            <Button variant="outline" className="w-full" onClick={() => setShowAddPortfolioSheet(false)}>
+              Cancel
+            </Button>
+          </div>
         </SheetContent>
       </Sheet>
 
