@@ -56,6 +56,7 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
   const [applyStep, setApplyStep] = useState(1)
   const [applicationMessage, setApplicationMessage] = useState("")
   const [selectedPortfolio, setSelectedPortfolio] = useState<string[]>([])
+  const [dbPortfolioImages, setDbPortfolioImages] = useState<string[]>([])
   const [showAiMatches, setShowAiMatches] = useState(false)
   const [submissionStatus, setSubmissionStatus] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -791,7 +792,15 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
 
       {/* Apply Sheet - Model */}
       {isModel && (
-        <Sheet open={showApplySheet} onOpenChange={setShowApplySheet}>
+        <Sheet open={showApplySheet} onOpenChange={(open) => {
+          setShowApplySheet(open)
+          if (open && user) {
+            api.getMedia(user.id, "PORTFOLIO").then((res) => {
+              const data = res.data as { media?: Array<{ url: string }> } | undefined
+              if (data?.media) setDbPortfolioImages(data.media.map((m) => m.url))
+            })
+          }
+        }}>
           <SheetContent side="bottom" className="h-[90vh] rounded-t-2xl overflow-y-auto">
             <SheetHeader>
               <SheetTitle>
@@ -874,12 +883,12 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                         <span className={user?.verified ? "" : "text-muted-foreground"}>Verified profile</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
-                        {(user?.portfolio?.length ?? 0) > 0 ? (
+                        {(dbPortfolioImages.length > 0 || (user?.portfolio?.length ?? 0) > 0) ? (
                           <Check className="w-4 h-4 text-emerald-500" />
                         ) : (
                           <AlertCircle className="w-4 h-4 text-amber-500" />
                         )}
-                        <span>Portfolio ({user?.portfolio?.length || 0} photos)</span>
+                        <span>Portfolio ({dbPortfolioImages.length || user?.portfolio?.length || 0} photos)</span>
                       </div>
                       {requiresDigitalTwin && (
                         <div className="flex items-center gap-2 text-sm">
@@ -907,7 +916,7 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                     Select photos to include with your application ({selectedPortfolio.length} selected)
                   </p>
                   <div className="grid grid-cols-3 gap-2">
-                    {(user?.portfolio || []).map((img, i) => (
+                    {(dbPortfolioImages.length > 0 ? dbPortfolioImages : user?.portfolio || []).map((img, i) => (
                       <button
                         key={i}
                         onClick={() => {
@@ -934,7 +943,7 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                       </button>
                     ))}
                   </div>
-                  {(user?.portfolio || []).length === 0 && (
+                  {dbPortfolioImages.length === 0 && (user?.portfolio || []).length === 0 && (
                     <p className="text-center text-muted-foreground text-sm py-4">
                       No portfolio photos yet. You can skip this step.
                     </p>
