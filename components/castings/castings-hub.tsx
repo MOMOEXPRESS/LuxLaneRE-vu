@@ -80,13 +80,13 @@ export function CastingsHub({ onViewCasting, onCreateCasting }: CastingsHubProps
       case "applied":
         castings = isCreator
           ? myCastings.filter((c) => c.applicationsCount > 0)
-          : allCastings.filter((c) => appliedCastingIds.includes(c.id))
+          : userApplications.filter((a) => appliedCastingIds.includes(a.castingId)).map((a) => a.casting).filter(Boolean) as Casting[]
         break
       case "shortlisted":
-        castings = allCastings.filter((c) => shortlistedCastingIds.includes(c.id))
+        castings = userApplications.filter((a) => a.status === "shortlisted" && a.casting).map((a) => a.casting!) as Casting[]
         break
       case "booked":
-        castings = allCastings.filter((c) => bookedCastingIds.includes(c.id))
+        castings = userApplications.filter((a) => (a.status === "accepted" || a.status === "confirmed") && a.casting).map((a) => a.casting!) as Casting[]
         break
     }
 

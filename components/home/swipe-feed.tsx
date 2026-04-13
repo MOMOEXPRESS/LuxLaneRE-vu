@@ -249,7 +249,18 @@ function PostCard({
   }
 
   const handleFollow = async () => {
-    setIsFollowing(true)
+    try {
+      // Look up userId from username via profile API
+      const profileRes = await api.getProfile(post.user.username)
+      const profileData = profileRes.data as { profile?: { userId?: string } } | undefined
+      const userId = profileData?.profile?.userId
+      if (userId) {
+        await api.follow(userId)
+        setIsFollowing(true)
+      }
+    } catch {
+      // Silently fail
+    }
   }
 
   const handleSendComment = async () => {
@@ -320,7 +331,17 @@ function PostCard({
         </button>
 
         {/* Share */}
-        <button className="flex flex-col items-center gap-0.5">
+        <button
+          className="flex flex-col items-center gap-0.5"
+          onClick={async () => {
+            const url = `${window.location.origin}/u/${post.user.username}`
+            if (navigator.share) {
+              await navigator.share({ title: post.caption || "Check this out on Luxlane", url }).catch(() => {})
+            } else {
+              await navigator.clipboard.writeText(url).catch(() => {})
+            }
+          }}
+        >
           <Share2 className="w-6 h-6 text-white" />
         </button>
 

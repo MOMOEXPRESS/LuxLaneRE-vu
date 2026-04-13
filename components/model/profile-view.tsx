@@ -1082,21 +1082,64 @@ export function ProfileView({
             {addPortfolioError && (
               <p className="text-sm text-destructive bg-destructive/10 p-2 rounded">{addPortfolioError}</p>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="portfolioUrl">Image URL</Label>
-              <Input
-                id="portfolioUrl"
-                type="url"
-                placeholder="https://example.com/photo.jpg"
-                value={addPortfolioUrl}
-                onChange={(e) => setAddPortfolioUrl(e.target.value)}
-                required
-              />
-              <p className="text-xs text-muted-foreground">Paste a public image URL to add it to your portfolio.</p>
+            <div className="space-y-3">
+              {/* File upload option */}
+              <div>
+                <Label className="text-sm font-medium">Upload from device</Label>
+                <label className="mt-1 flex items-center justify-center w-full h-24 border-2 border-dashed border-muted-foreground/30 rounded-xl cursor-pointer hover:border-muted-foreground/50 transition-colors">
+                  <div className="text-center">
+                    <Camera className="w-6 h-6 mx-auto text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground mt-1">Tap to choose photo</p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      setAddPortfolioSaving(true)
+                      const formData = new FormData()
+                      formData.append("file", file)
+                      formData.append("type", "portfolio")
+                      const uploadRes = await fetch("/api/media/upload", { method: "POST", credentials: "include", body: formData })
+                      if (uploadRes.ok) {
+                        const data = await uploadRes.json()
+                        const url = data.url
+                        if (url) {
+                          await api.addPortfolioImage(url)
+                          setShowAddPortfolioSheet(false)
+                          onProfileUpdated?.()
+                        }
+                      }
+                      setAddPortfolioSaving(false)
+                    }}
+                  />
+                </label>
+              </div>
+
+              {/* OR divider */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground">or</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
+              {/* URL option */}
+              <div className="space-y-2">
+                <Label htmlFor="portfolioUrl">Paste image URL</Label>
+                <Input
+                  id="portfolioUrl"
+                  type="url"
+                  placeholder="https://example.com/photo.jpg"
+                  value={addPortfolioUrl}
+                  onChange={(e) => setAddPortfolioUrl(e.target.value)}
+                />
+              </div>
             </div>
             <div className="flex gap-2">
               <Button type="submit" disabled={addPortfolioSaving || !addPortfolioUrl.trim()}>
-                {addPortfolioSaving ? "Adding…" : "Add photo"}
+                {addPortfolioSaving ? "Adding…" : "Add from URL"}
               </Button>
               <Button type="button" variant="outline" onClick={() => setShowAddPortfolioSheet(false)}>
                 Cancel
