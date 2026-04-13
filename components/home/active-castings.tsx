@@ -104,7 +104,7 @@ export function ActiveCastings({ onViewCasting, onViewAll }: ActiveCastingsProps
                   <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-3 h-3" />
-                      {casting.location.split(",")[0]}
+                      {casting.location?.split(",")[0] || "TBD"}
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
@@ -119,7 +119,7 @@ export function ActiveCastings({ onViewCasting, onViewAll }: ActiveCastingsProps
                         ? "TBD"
                         : `${casting.pay.currency} ${casting.pay.amount.toLocaleString()}`}
                     </span>
-                    <Button size="sm" variant="outline" className="h-7 text-xs bg-transparent">
+                    <Button size="sm" variant="outline" className="h-7 text-xs bg-transparent" onClick={(e) => { e.stopPropagation(); onViewCasting(casting) }}>
                       {getActionLabel()}
                     </Button>
                   </div>

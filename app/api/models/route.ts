@@ -1,15 +1,31 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getCurrentUser } from "@/lib/auth"
 
 // GET — list all models (optionally filter unsigned only)
 export async function GET(request: NextRequest) {
   try {
+    const currentUser = await getCurrentUser()
     const { searchParams } = new URL(request.url)
     const unsignedOnly = searchParams.get("unsigned") === "true"
     const query = searchParams.get("query")
     const limit = Math.min(Number(searchParams.get("limit")) || 50, 100)
 
     const where: Record<string, unknown> = { role: "MODEL" }
+
+    // Filter out blocked users
+    if (currentUser) {
+      const blocks = await prisma.block.findMany({
+        where: { OR: [{ blockerId: currentUser.id }, { blockedId: currentUser.id }] },
+        select: { blockerId: true, blockedId: true },
+      })
+      const blockedIds = blocks.map((b: { blockerId: string; blockedId: string }) =>
+        b.blockerId === currentUser.id ? b.blockedId : b.blockerId
+      )
+      if (blockedIds.length > 0) {
+        where.id = { notIn: blockedIds }
+      }
+    }
 
     // Filter out models already signed to an agency
     if (unsignedOnly) {

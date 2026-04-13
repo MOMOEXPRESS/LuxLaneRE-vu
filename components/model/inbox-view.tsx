@@ -124,13 +124,13 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
     }
   }, [initialConversationId, conversations, selectedConversation, dismissedInitial, onConversationOpened])
 
-  // Fetch real bookings from store (loaded from DB)
-  const { getApplicationsForModel } = useStore()
+  // Fetch real bookings + offers from store (loaded from DB)
+  const { getApplicationsForModel, refreshCastings } = useStore()
   const allApplications = user ? getApplicationsForModel(user.id) : []
+  const offeredApplications = allApplications.filter((a) => a.status === "offered")
   const bookingApplications = allApplications.filter(
-    (a) => a.status === "accepted" || a.status === "shortlisted" || a.status === "offered" || a.status === "confirmed"
+    (a) => a.status === "accepted" || a.status === "shortlisted" || a.status === "confirmed"
   )
-  const pendingOffers: JobOffer[] = []
 
   if (selectedConversation) {
     return (
@@ -230,19 +230,69 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
             exit={{ opacity: 0 }}
             className="p-4 space-y-3"
           >
+            {/* Pending Offers — need Accept/Decline */}
+            {offeredApplications.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">Pending Offers</h3>
+                {offeredApplications.map((app) => (
+                  <Card key={app.id} className="p-4 space-y-3 mb-3 border-purple-500/30 bg-purple-500/5">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm">{app.casting?.title || "Casting"}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">{app.casting?.creator?.name || "Brand"}</p>
+                      </div>
+                      <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">
+                        <Sparkles className="w-3 h-3 mr-1" />
+                        Offer
+                      </Badge>
+                    </div>
+                    {app.casting?.location && (
+                      <p className="text-xs text-muted-foreground">{app.casting.location}</p>
+                    )}
+                    {app.casting?.pay && (
+                      <p className="text-sm font-medium">{app.casting.pay.amount.toLocaleString()} {app.casting.pay.currency}</p>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        className="flex-1 bg-transparent"
+                        onClick={async () => {
+                          await api.declineOffer(app.id)
+                          refreshCastings()
+                        }}
+                      >
+                        <X className="w-4 h-4 mr-1" /> Decline
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={async () => {
+                          await api.acceptOffer(app.id)
+                          refreshCastings()
+                        }}
+                      >
+                        <Check className="w-4 h-4 mr-1" /> Accept
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* Confirmed bookings */}
             {bookingApplications.length > 0 ? (
               <div className="space-y-3">
+                {offeredApplications.length > 0 && <h3 className="text-sm font-medium text-muted-foreground mb-2">Bookings</h3>}
                 {bookingApplications.map((application) => (
                   <BookingCard key={application.id} application={application} />
                 ))}
               </div>
-            ) : (
+            ) : offeredApplications.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <CalendarCheck className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>No bookings yet</p>
                 <p className="text-xs mt-1">Accepted casting applications will appear here</p>
               </div>
-            )}
+            ) : null}
           </motion.div>
         )}
 
@@ -262,27 +312,18 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
               </div>
             )}
 
-            {/* Pending Offers Section */}
-            {pendingOffers.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-medium text-muted-foreground mb-3">Pending Offers</h3>
-                {pendingOffers.map((offer) => (
-                  <OfferCard key={offer.id} offer={offer} onUpdate={() => {}} />
-                ))}
-              </div>
-            )}
-
             {/* Notifications Section */}
             {notifications.length > 0 ? (
               <div className="space-y-2">
-                {pendingOffers.length > 0 && (
-                  <h3 className="text-sm font-medium text-muted-foreground mb-3">Recent Activity</h3>
-                )}
                 {notifications.map((notification) => (
                   <NotificationItem
                     key={notification.id}
                     notification={notification}
                     onRead={() => handleMarkOneRead(notification.id)}
+                    onAgencyRespond={async (applicationId, action) => {
+                      await api.respondToAgencyApplication(applicationId, action)
+                      refreshNotifications()
+                    }}
                   />
                 ))}
               </div>
@@ -299,7 +340,10 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
   )
 }
 
-function NotificationItem({ notification, onRead }: { notification: Notification; onRead: () => void }) {
+function NotificationItem({ notification, onRead, onAgencyRespond }: { notification: Notification; onRead: () => void; onAgencyRespond?: (applicationId: string, action: "accept" | "reject") => void }) {
+  const [responding, setResponding] = useState(false)
+  const isAgencyInvite = notification.metadata?.relatedType === "agency_application" && notification.metadata?.relatedId
+
   const getIcon = () => {
     switch (notification.type) {
       case "casting_invite":
@@ -334,6 +378,34 @@ function NotificationItem({ notification, onRead }: { notification: Notification
             {!notification.read && <span className="w-2 h-2 bg-foreground rounded-full" />}
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">{notification.message}</p>
+          {isAgencyInvite && onAgencyRespond && !responding && (
+            <div className="flex gap-2 mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-transparent text-xs"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setResponding(true)
+                  onAgencyRespond(notification.metadata.relatedId, "reject")
+                }}
+              >
+                <X className="w-3 h-3 mr-1" /> Decline
+              </Button>
+              <Button
+                size="sm"
+                className="text-xs"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setResponding(true)
+                  onAgencyRespond(notification.metadata.relatedId, "accept")
+                }}
+              >
+                <Check className="w-3 h-3 mr-1" /> Accept
+              </Button>
+            </div>
+          )}
+          {responding && <p className="text-xs text-muted-foreground mt-2">Response sent</p>}
           <p className="text-xs text-muted-foreground mt-1">
             {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
           </p>
@@ -564,12 +636,16 @@ function ChatView({
 function BookingCard({ application }: { application: CastingApplication }) {
   const statusColors: Record<string, string> = {
     accepted: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+    confirmed: "bg-green-500/10 text-green-600 border-green-500/20",
     shortlisted: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    offered: "bg-purple-500/10 text-purple-600 border-purple-500/20",
   }
 
   const statusLabels: Record<string, string> = {
-    accepted: "Confirmed",
+    accepted: "Accepted",
+    confirmed: "Confirmed",
     shortlisted: "Shortlisted",
+    offered: "Offer Pending",
   }
 
   return (

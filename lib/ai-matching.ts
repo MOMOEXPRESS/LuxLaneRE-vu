@@ -49,7 +49,7 @@ function calculateExperienceMatch(model: User, requirements: ModelRequirements):
 
 // Calculate reliability score from metrics
 function calculateReliability(model: User): number {
-  if (!model.metrics) return 50
+  if (!model.metrics?.components) return 50
 
   const { responseRate, reliability } = model.metrics.components
   return Math.round((responseRate + reliability) / 2)

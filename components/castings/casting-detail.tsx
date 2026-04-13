@@ -209,7 +209,10 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
       case "applied": return { label: "Application Sent", color: "text-blue-400", bgColor: "bg-blue-500/10 border-blue-500/20" }
       case "under_review": return { label: "Under Review", color: "text-amber-400", bgColor: "bg-amber-500/10 border-amber-500/20" }
       case "shortlisted": return { label: "Shortlisted", color: "text-emerald-400", bgColor: "bg-emerald-500/10 border-emerald-500/20" }
+      case "offered": return { label: "Offer Received", color: "text-purple-400", bgColor: "bg-purple-500/10 border-purple-500/20" }
       case "accepted": return { label: "Accepted", color: "text-green-400", bgColor: "bg-green-500/10 border-green-500/20" }
+      case "confirmed": return { label: "Booking Confirmed", color: "text-green-400", bgColor: "bg-green-500/10 border-green-500/20" }
+      case "declined": return { label: "Declined", color: "text-zinc-400", bgColor: "bg-zinc-500/10 border-zinc-500/20" }
       case "rejected": return { label: "Not Selected", color: "text-red-400", bgColor: "bg-red-500/10 border-red-500/20" }
       default: return { label: status, color: "text-muted-foreground", bgColor: "bg-muted" }
     }
