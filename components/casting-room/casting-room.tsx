@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import type { CastingRoom, RoomEvent, User } from "@/lib/types"
 import { api } from "@/lib/api-client"
 import { useAuth } from "@/lib/auth-context"
@@ -572,7 +573,11 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
                 cells.push(
                   <button
                     key={day}
-                    onClick={() => { setSelectedDate(isSelected ? null : dateStr); setShowScheduleForm(false) }}
+                    onClick={() => {
+                      setSelectedDate(dateStr)
+                      setScheduleDate(dateStr)
+                      setShowScheduleForm(true)
+                    }}
                     className={`aspect-square rounded-lg flex flex-col items-center justify-center text-sm relative transition-colors ${
                       isSelected ? "bg-foreground text-background" :
                       isToday ? "bg-muted ring-1 ring-foreground/30" :
@@ -590,22 +595,12 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
             })()}
           </div>
 
-          {/* Selected date — events + add form */}
-          {selectedDate && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-sm">
-                  {format(new Date(selectedDate + "T00:00:00"), "EEEE, MMMM d")}
-                </h4>
-                <Button size="sm" variant="outline" onClick={() => {
-                  setScheduleDate(selectedDate)
-                  setShowScheduleForm(true)
-                }}>
-                  + Add
-                </Button>
-              </div>
-
-              {/* Events for this date */}
+          {/* Existing events for selected date shown below calendar */}
+          {selectedDate && schedule.filter((s) => s.date === selectedDate).length > 0 && (
+            <div className="space-y-2 mt-2">
+              <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">
+                {format(new Date(selectedDate + "T00:00:00"), "EEEE, MMMM d")}
+              </h4>
               {schedule.filter((s) => s.date === selectedDate).map((item) => (
                 <Card key={item.id} className="p-3">
                   <div className="flex items-start gap-3">
@@ -619,50 +614,55 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
                   </div>
                 </Card>
               ))}
+            </div>
+          )}
 
-              {schedule.filter((s) => s.date === selectedDate).length === 0 && !showScheduleForm && (
-                <p className="text-sm text-muted-foreground text-center py-4">No events on this day</p>
-              )}
+          {!selectedDate && (
+            <p className="text-center text-sm text-muted-foreground py-4">Tap a date to add an event</p>
+          )}
 
-              {/* Add event form */}
-              {showScheduleForm && (
-                <Card className="p-4 space-y-3 border-foreground/20">
-                  <Input
-                    placeholder="Title (e.g. Fitting, Shoot Day 1)"
-                    value={scheduleTitle}
-                    onChange={(e) => setScheduleTitle(e.target.value)}
-                    autoFocus
-                  />
+          {/* Add event popup sheet — opens automatically when date is tapped */}
+          <Sheet open={showScheduleForm} onOpenChange={setShowScheduleForm}>
+            <SheetContent side="bottom" className="h-auto max-h-[70vh] rounded-t-2xl">
+              <SheetHeader>
+                <SheetTitle>
+                  {selectedDate ? format(new Date(selectedDate + "T00:00:00"), "EEEE, MMMM d") : "Add Event"}
+                </SheetTitle>
+              </SheetHeader>
+              <div className="mt-4 space-y-4">
+                <Input
+                  placeholder="Title (e.g. Fitting, Shoot Day 1)"
+                  value={scheduleTitle}
+                  onChange={(e) => setScheduleTitle(e.target.value)}
+                  autoFocus
+                />
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Time</label>
                   <Input
                     type="time"
                     value={scheduleTime}
                     onChange={(e) => setScheduleTime(e.target.value)}
                   />
-                  <Input
-                    placeholder="Location (optional)"
-                    value={scheduleLocation}
-                    onChange={(e) => setScheduleLocation(e.target.value)}
-                  />
-                  <Input
-                    placeholder="Notes (optional)"
-                    value={scheduleNotes}
-                    onChange={(e) => setScheduleNotes(e.target.value)}
-                  />
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1" onClick={() => setShowScheduleForm(false)}>Cancel</Button>
-                    <Button className="flex-1" onClick={handleAddScheduleItem} disabled={scheduleSaving || !scheduleTitle || !scheduleTime}>
-                      {scheduleSaving ? "Saving..." : "Add"}
-                    </Button>
-                  </div>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* No date selected hint */}
-          {!selectedDate && schedule.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-4">Tap a date to view or add events</p>
-          )}
+                </div>
+                <Input
+                  placeholder="Location (optional)"
+                  value={scheduleLocation}
+                  onChange={(e) => setScheduleLocation(e.target.value)}
+                />
+                <Input
+                  placeholder="Notes (optional)"
+                  value={scheduleNotes}
+                  onChange={(e) => setScheduleNotes(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setShowScheduleForm(false)}>Cancel</Button>
+                  <Button className="flex-1" onClick={handleAddScheduleItem} disabled={scheduleSaving || !scheduleTitle || !scheduleTime}>
+                    {scheduleSaving ? "Saving..." : "Add Event"}
+                  </Button>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
         </TabsContent>
       </Tabs>
     </div>
