@@ -348,6 +348,7 @@ export default function Home() {
         showLogo={activeTab === "home"}
         title={getHeaderTitle()}
         onAvatarClick={() => navigateTo("own-profile")}
+        notificationCount={unreadCount}
       />
       {renderTabContent()}
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />

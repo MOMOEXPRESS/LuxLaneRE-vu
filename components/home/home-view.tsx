@@ -15,7 +15,10 @@ import { api } from "@/lib/api-client"
 import { getRecommendedCastingsForModel } from "@/lib/ai-matching"
 import { Card } from "@/components/ui/card"
 import { CreateStorySheet } from "@/components/stories/create-story-sheet"
-import { ChevronRight, Sparkles, MapPin, DollarSign, Calendar, Clock } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { ChevronRight, Sparkles, MapPin, DollarSign, Calendar, Clock, Plus, ImageIcon, Loader2, Send } from "lucide-react"
 import type { Casting, User } from "@/lib/types"
 
 interface HomeViewProps {
@@ -62,8 +65,12 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
 
   const isModel = user?.role === "model"
 
-  // Story creation state
+  // Story + Post creation state
   const [showCreateStory, setShowCreateStory] = useState(false)
+  const [showCreatePost, setShowCreatePost] = useState(false)
+  const [newPostCaption, setNewPostCaption] = useState("")
+  const [newPostImage, setNewPostImage] = useState("")
+  const [postCreating, setPostCreating] = useState(false)
 
   // Story viewer state
   const [viewingStories, setViewingStories] = useState<{
@@ -206,6 +213,90 @@ export function HomeView({ onViewCasting, onViewProfile, onViewCastingsHub, onVi
         onSave={handleSave}
         refreshFeed={refreshPosts}
       />
+
+      {/* Floating Create Post Button */}
+      <button
+        onClick={() => setShowCreatePost(true)}
+        className="fixed bottom-20 right-4 z-30 w-14 h-14 rounded-full bg-foreground text-background flex items-center justify-center shadow-lg hover:opacity-90 transition-opacity"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+
+      {/* Create Post Sheet */}
+      <Sheet open={showCreatePost} onOpenChange={setShowCreatePost}>
+        <SheetContent side="bottom" className="h-[60vh] rounded-t-2xl">
+          <SheetHeader>
+            <SheetTitle>Create Post</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-1 block">Image</label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Paste image URL or upload..."
+                  value={newPostImage}
+                  onChange={(e) => setNewPostImage(e.target.value)}
+                  className="flex-1"
+                />
+                <label className="cursor-pointer">
+                  <div className="h-10 px-3 rounded-md border border-input bg-background flex items-center gap-1 text-sm hover:bg-accent">
+                    <ImageIcon className="w-4 h-4" /> Upload
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      const formData = new FormData()
+                      formData.append("file", file)
+                      formData.append("type", "post")
+                      const res = await fetch("/api/media/upload", { method: "POST", credentials: "include", body: formData })
+                      if (res.ok) {
+                        const data = await res.json()
+                        setNewPostImage(data.url || "")
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              {newPostImage && (
+                <div className="mt-2 aspect-square w-32 rounded-lg overflow-hidden bg-muted">
+                  <img src={newPostImage} alt="Preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-1 block">Caption</label>
+              <Input
+                placeholder="Write a caption..."
+                value={newPostCaption}
+                onChange={(e) => setNewPostCaption(e.target.value)}
+                maxLength={500}
+              />
+            </div>
+            <Button
+              className="w-full h-12"
+              disabled={!newPostImage.trim() || postCreating}
+              onClick={async () => {
+                setPostCreating(true)
+                const res = await api.createPost({ imageUrl: newPostImage.trim(), caption: newPostCaption.trim() || undefined })
+                setPostCreating(false)
+                if (!res.error) {
+                  setShowCreatePost(false)
+                  setNewPostImage("")
+                  setNewPostCaption("")
+                  refreshPosts()
+                }
+              }}
+            >
+              {postCreating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Post
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
