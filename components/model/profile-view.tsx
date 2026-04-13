@@ -86,6 +86,7 @@ export function ProfileView({
   const [dbPortfolio, setDbPortfolio] = useState<Array<{ id: string; url: string; type: string; meta?: any }>>([])
   const [dbPosts, setDbPosts] = useState<Array<{ id: string; imageUrl: string; caption?: string | null; createdAt: string }>>([])
   const [liveMeasurements, setLiveMeasurements] = useState<typeof user.measurements | undefined>(undefined)
+  const [agencyInfo, setAgencyInfo] = useState<{ id: string; name: string; avatar?: string; location?: string } | null>(null)
 
   // Resolve the user (prop or current auth user)
   const resolvedUserId = profileUser?.id || currentUser?.id
@@ -105,11 +106,19 @@ export function ProfileView({
       setDbPosts(postsData.posts.filter((p) => p.userId === resolvedUserId))
     }
 
-    // Refresh measurements from profile API
+    // Refresh measurements + agency from profile API
     const profileRes = await api.getMyProfile()
-    const profileData = profileRes.data as { profile?: { measurements?: any } } | undefined
+    const profileData = profileRes.data as { profile?: { measurements?: any; agencyId?: string; agencyName?: string; agencyAvatar?: string; agencyLocation?: string } } | undefined
     if (profileData?.profile?.measurements) {
       setLiveMeasurements(profileData.profile.measurements)
+    }
+    if (profileData?.profile?.agencyId) {
+      setAgencyInfo({
+        id: profileData.profile.agencyId,
+        name: profileData.profile.agencyName || "Agency",
+        avatar: profileData.profile.agencyAvatar,
+        location: profileData.profile.agencyLocation,
+      })
     }
   }, [resolvedUserId])
 
@@ -493,9 +502,25 @@ export function ProfileView({
               Message
             </Button>
             {isBrandOrAgency && user.role === "model" && (
-              <Button variant="outline" onClick={() => setShowInviteSheet(true)}>
-                Invite
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setShowInviteSheet(true)}>
+                  Invite
+                </Button>
+                {currentUser?.role === "agency" && (
+                  <Button
+                    variant="outline"
+                    className="bg-transparent"
+                    onClick={async () => {
+                      const res = await api.inviteModelToAgency(user.id)
+                      if (res.error) alert(res.error)
+                      else alert("Invitation sent!")
+                    }}
+                  >
+                    <UserPlus className="w-4 h-4 mr-1" />
+                    Roster
+                  </Button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -942,19 +967,40 @@ export function ProfileView({
                   </Card>
                 )}
 
-                {/* Agency */}
-                {user.agencyId && user.agencyName && (
+                {/* Agency — show from DB agencyInfo or static user data */}
+                {(agencyInfo || (user.agencyId && user.agencyName)) && (
                   <Card className="p-4">
                     <h3 className="font-semibold mb-3">Represented By</h3>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage src={user.agencyAvatar || "/placeholder.svg"} />
-                        <AvatarFallback>{user.agencyName?.[0] || "A"}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">{user.agencyName}</p>
-                        <p className="text-sm text-muted-foreground">{user.agencyLocation || "Agency"}</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={agencyInfo?.avatar || user.agencyAvatar || "/placeholder.svg"} />
+                          <AvatarFallback>{(agencyInfo?.name || user.agencyName)?.[0] || "A"}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{agencyInfo?.name || user.agencyName}</p>
+                          <p className="text-sm text-muted-foreground">{agencyInfo?.location || user.agencyLocation || "Agency"}</p>
+                        </div>
                       </div>
+                      {/* Leave agency button for own profile */}
+                      {isOwn && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-red-400"
+                          onClick={async () => {
+                            if (!confirm("Leave this agency? You can reapply later.")) return
+                            // Call leave agency API (model removes themselves)
+                            const res = await api.updateModelProfile({ agencyId: null })
+                            if (!res.error) {
+                              setAgencyInfo(null)
+                              fetchProfileData()
+                            }
+                          }}
+                        >
+                          Leave
+                        </Button>
+                      )}
                     </div>
                   </Card>
                 )}
@@ -1118,13 +1164,18 @@ export function ProfileView({
                 <Card
                   key={casting.id}
                   className="p-4 cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => {
-                    onInviteToCasting?.(casting)
-                    setShowInviteSheet(false)
+                  onClick={async () => {
+                    const res = await api.inviteModelToCasting(casting.id, user.id)
+                    if (res.error) {
+                      alert(res.error)
+                    } else {
+                      setShowInviteSheet(false)
+                    }
                   }}
                 >
                   <h4 className="font-medium">{casting.title}</h4>
-                  <p className="text-sm text-muted-foreground">{casting.type}</p>
+                  <p className="text-sm text-muted-foreground capitalize">{casting.type}</p>
+                  <p className="text-xs text-muted-foreground">{casting.location}</p>
                 </Card>
               ))
             ) : (

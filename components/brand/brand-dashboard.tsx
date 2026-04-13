@@ -349,7 +349,17 @@ export function BrandDashboard({ onViewCasting, onViewProfile, onBack, bottomNav
                     {myCastings.length > 0 ? (
                       <div className="space-y-3">
                         {myCastings.map((casting) => (
-                          <CastingCard key={casting.id} casting={casting} onClick={() => handleCastingClick(casting)} />
+                          <CastingCard
+                            key={casting.id}
+                            casting={casting}
+                            onClick={() => handleCastingClick(casting)}
+                            onClose={async (c) => {
+                              if (confirm(`Close "${c.title}"? It will stop accepting applications.`)) {
+                                await api.closeCasting(c.id)
+                                fetchMyCastings()
+                              }
+                            }}
+                          />
                         ))}
                       </div>
                     ) : (
@@ -801,10 +811,14 @@ function CastingCard({
   casting,
   onClick,
   showCreator = false,
+  onEdit,
+  onClose,
 }: {
   casting: Casting
   onClick: () => void
   showCreator?: boolean
+  onEdit?: (casting: Casting) => void
+  onClose?: (casting: Casting) => void
 }) {
   const typeLabels: Record<CastingType, string> = {
     runway: "Runway",
@@ -840,12 +854,28 @@ function CastingCard({
           {format(casting.dates.start, "MMM d")}
         </span>
       </div>
-      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border text-sm">
-        <span className="flex items-center gap-1">
-          <Users className="w-4 h-4" />
-          {casting.applicationsCount} applications
-        </span>
-        <span>{casting.shortlistedCount} shortlisted</span>
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border text-sm">
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1">
+            <Users className="w-4 h-4" />
+            {casting.applicationsCount} applications
+          </span>
+          <span>{casting.shortlistedCount} shortlisted</span>
+        </div>
+        {(onEdit || onClose) && casting.status === "active" && (
+          <div className="flex gap-1">
+            {onClose && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs text-muted-foreground"
+                onClick={(e) => { e.stopPropagation(); onClose(casting) }}
+              >
+                Close
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </Card>
   )
@@ -1295,6 +1325,12 @@ function CreateCastingSheet({
   const [description, setDescription] = useState("")
   const [location, setLocation] = useState("")
   const [pay, setPay] = useState("")
+  const [gender, setGender] = useState("any")
+  const [heightMin, setHeightMin] = useState("")
+  const [heightMax, setHeightMax] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [deadline, setDeadline] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async () => {
@@ -1309,9 +1345,14 @@ function CreateCastingSheet({
       location: location || undefined,
       payMin: payAmount || undefined,
       payMax: payAmount || undefined,
-      startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      endDate: new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString(),
-      deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      startDate: startDate ? new Date(startDate).toISOString() : new Date(Date.now() + 30 * 86400000).toISOString(),
+      endDate: endDate ? new Date(endDate).toISOString() : new Date(Date.now() + 31 * 86400000).toISOString(),
+      deadline: deadline ? new Date(deadline).toISOString() : new Date(Date.now() + 14 * 86400000).toISOString(),
+      requirements: {
+        gender: gender !== "any" ? gender : undefined,
+        minHeightCm: heightMin ? parseInt(heightMin) : undefined,
+        maxHeightCm: heightMax ? parseInt(heightMax) : undefined,
+      },
     })
 
     if (res.error) {
@@ -1405,6 +1446,58 @@ function CreateCastingSheet({
               placeholder="e.g., 5000"
               className="mt-1"
             />
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Start Date</Label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label>End Date</Label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1" />
+            </div>
+          </div>
+
+          <div>
+            <Label>Application Deadline</Label>
+            <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="mt-1" />
+          </div>
+
+          {/* Requirements */}
+          <div className="pt-2 border-t border-border">
+            <h4 className="font-medium text-sm mb-3">Requirements</h4>
+            <div className="space-y-3">
+              <div>
+                <Label>Gender</Label>
+                <div className="flex gap-2 mt-1">
+                  {["any", "female", "male", "non-binary"].map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGender(g)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize transition-colors ${
+                        gender === g ? "bg-foreground text-background" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Min Height (cm)</Label>
+                  <Input type="number" placeholder="e.g. 170" value={heightMin} onChange={(e) => setHeightMin(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Max Height (cm)</Label>
+                  <Input type="number" placeholder="e.g. 185" value={heightMax} onChange={(e) => setHeightMax(e.target.value)} className="mt-1" />
+                </div>
+              </div>
+            </div>
           </div>
 
           <Button className="w-full h-12" onClick={handleSubmit} disabled={!title || submitting}>
