@@ -575,24 +575,36 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
                 const isSelected = selectedDate === dateStr
                 const isToday = dateStr === format(new Date(), "yyyy-MM-dd")
                 cells.push(
-                  <button
-                    key={day}
-                    onClick={() => {
-                      setSelectedDate(dateStr)
-                      setScheduleDate(dateStr)
-                      setShowScheduleForm(true)
-                    }}
-                    className={`aspect-square rounded-lg flex flex-col items-center justify-center text-sm relative transition-colors ${
-                      isSelected ? "bg-foreground text-background" :
-                      isToday ? "bg-muted ring-1 ring-foreground/30" :
-                      "hover:bg-muted/50"
-                    }`}
-                  >
-                    <span className={`font-medium ${isSelected ? "" : ""}`}>{day}</span>
-                    {dayEvents.length > 0 && (
-                      <div className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? "bg-background" : "bg-violet-500"}`} />
-                    )}
-                  </button>
+                  <div key={day} className="relative group">
+                    <button
+                      onClick={() => {
+                        setSelectedDate(isSelected ? null : dateStr)
+                        setShowScheduleForm(false)
+                      }}
+                      className={`w-full aspect-square rounded-lg flex flex-col items-center justify-center text-sm relative transition-colors ${
+                        isSelected ? "bg-foreground text-background" :
+                        isToday ? "bg-muted ring-1 ring-foreground/30" :
+                        "hover:bg-muted/50"
+                      }`}
+                    >
+                      <span className="font-medium">{day}</span>
+                      {dayEvents.length > 0 && (
+                        <div className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? "bg-background" : "bg-violet-500"}`} />
+                      )}
+                    </button>
+                    {/* Hover: small "+ Add" button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedDate(dateStr)
+                        setScheduleDate(dateStr)
+                        setShowScheduleForm(true)
+                      }}
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-500 text-white text-[8px] font-bold items-center justify-center hidden group-hover:flex z-10 shadow"
+                    >
+                      +
+                    </button>
+                  </div>
                 )
               }
               return cells
