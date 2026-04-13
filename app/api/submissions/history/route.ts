@@ -20,10 +20,8 @@ export async function GET(request: NextRequest) {
 
     if (status) {
       where.status = status.toUpperCase()
-    } else {
-      // Default: show completed/accepted/confirmed/declined/rejected (past jobs)
-      where.status = { in: ["ACCEPTED", "CONFIRMED", "DECLINED", "REJECTED"] }
     }
+    // No default filter — return ALL submissions (applied, shortlisted, offered, accepted, confirmed, etc.)
 
     const [submissions, total] = await Promise.all([
       prisma.submission.findMany({
@@ -45,6 +43,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       submissions: submissions.map((s: typeof submissions[number]) => ({
         id: s.id,
+        castingId: s.castingId,
+        modelId: s.modelId,
         status: s.status,
         note: s.note,
         createdAt: s.createdAt,
