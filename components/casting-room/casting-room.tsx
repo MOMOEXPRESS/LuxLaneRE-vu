@@ -104,6 +104,18 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
   const [messages, setMessages] = useState<ApiRoomMessage[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Schedule form state
+  const [showScheduleForm, setShowScheduleForm] = useState(false)
+  const [scheduleTitle, setScheduleTitle] = useState("")
+  const [scheduleDate, setScheduleDate] = useState("")
+  const [scheduleTime, setScheduleTime] = useState("")
+  const [scheduleLocation, setScheduleLocation] = useState("")
+  const [scheduleNotes, setScheduleNotes] = useState("")
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+
+  // File upload state
+  const [fileUploading, setFileUploading] = useState(false)
+
   const fetchEvents = useCallback(async () => {
     const res = await api.getRoomEvents(room.id)
     const data = res.data as { events?: ApiRoomEvent[] } | undefined
@@ -176,6 +188,51 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
     if (data?.message) {
       setMessages((prev) => [...prev, data.message!])
     }
+  }
+
+  // Poll for new messages every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchMessages, 5000)
+    return () => clearInterval(interval)
+  }, [fetchMessages])
+
+  const handleAddScheduleItem = async () => {
+    if (!scheduleTitle || !scheduleDate || !scheduleTime) return
+    setScheduleSaving(true)
+    await api.addRoomScheduleItem(room.id, {
+      title: scheduleTitle,
+      date: scheduleDate,
+      time: scheduleTime,
+      location: scheduleLocation || undefined,
+      notes: scheduleNotes || undefined,
+    })
+    setScheduleSaving(false)
+    setShowScheduleForm(false)
+    setScheduleTitle("")
+    setScheduleDate("")
+    setScheduleTime("")
+    setScheduleLocation("")
+    setScheduleNotes("")
+    fetchSchedule()
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileUploading(true)
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("type", "casting_room")
+    const uploadRes = await fetch("/api/media/upload", { method: "POST", credentials: "include", body: formData })
+    if (uploadRes.ok) {
+      const data = await uploadRes.json()
+      if (data.url) {
+        const fileType = file.name.match(/\.(pdf|doc|docx)$/i) ? "contract" : file.type.startsWith("image/") ? "moodboard" : "other"
+        await api.uploadRoomFile(room.id, { name: file.name, type: fileType, url: data.url })
+        fetchFiles()
+      }
+    }
+    setFileUploading(false)
   }
 
   const getEventIcon = (type: RoomEvent["type"]) => {
@@ -284,7 +341,7 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent flex-1"
           >
             <Users className="w-4 h-4 mr-1" />
-            Shortlist
+            Members
           </TabsTrigger>
           <TabsTrigger
             value="chat"
@@ -340,7 +397,7 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
           </div>
         </TabsContent>
 
-        {/* Shortlist */}
+        {/* Members (confirmed models only) */}
         <TabsContent value="shortlist" className="flex-1 overflow-auto mt-0 p-4">
           <div className="space-y-2">
             {room.members
@@ -359,15 +416,15 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
                     <p className="font-medium text-sm truncate">{model.name}</p>
                     <p className="text-xs text-muted-foreground">{model.location}</p>
                   </div>
-                  <Badge variant="secondary" className="text-[10px]">
-                    Shortlisted
+                  <Badge variant="secondary" className="text-[10px] bg-emerald-500/10 text-emerald-500">
+                    Confirmed
                   </Badge>
                 </Card>
               ))}
             {room.members.filter((m) => m.role === "model").length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
                 <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>No models shortlisted yet</p>
+                <p>No confirmed models yet</p>
               </div>
             )}
           </div>
@@ -423,6 +480,24 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
         {/* Files */}
         <TabsContent value="files" className="flex-1 overflow-auto mt-0 p-4">
           <div className="space-y-2">
+            {/* Upload button */}
+            <label className="block cursor-pointer">
+              <Card className="p-3 flex items-center gap-3 border-dashed border-2 hover:bg-muted/30 transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                  {fileUploading ? (
+                    <div className="w-5 h-5 border-2 border-muted-foreground border-t-foreground rounded-full animate-spin" />
+                  ) : (
+                    <Paperclip className="w-5 h-5" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{fileUploading ? "Uploading..." : "Upload File"}</p>
+                  <p className="text-xs text-muted-foreground">Contracts, moodboards, call sheets</p>
+                </div>
+              </Card>
+              <input type="file" className="hidden" disabled={fileUploading} onChange={handleFileUpload} />
+            </label>
+
             {files.map((file) => (
               <Card key={file.id} className="p-3 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
@@ -440,8 +515,7 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
               </Card>
             ))}
             {files.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">
-                <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <div className="text-center py-8 text-muted-foreground text-sm">
                 <p>No files uploaded yet</p>
               </div>
             )}
@@ -451,6 +525,51 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
         {/* Schedule */}
         <TabsContent value="schedule" className="flex-1 overflow-auto mt-0 p-4">
           <div className="space-y-3">
+            {/* Add schedule form */}
+            {showScheduleForm ? (
+              <Card className="p-4 space-y-3 border-foreground/20">
+                <h4 className="font-semibold text-sm">Add Schedule Item</h4>
+                <Input
+                  placeholder="Title (e.g. Fitting, Shoot Day 1)"
+                  value={scheduleTitle}
+                  onChange={(e) => setScheduleTitle(e.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                  />
+                  <Input
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                  />
+                </div>
+                <Input
+                  placeholder="Location (optional)"
+                  value={scheduleLocation}
+                  onChange={(e) => setScheduleLocation(e.target.value)}
+                />
+                <Input
+                  placeholder="Notes (optional)"
+                  value={scheduleNotes}
+                  onChange={(e) => setScheduleNotes(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setShowScheduleForm(false)}>Cancel</Button>
+                  <Button className="flex-1" onClick={handleAddScheduleItem} disabled={scheduleSaving || !scheduleTitle || !scheduleDate || !scheduleTime}>
+                    {scheduleSaving ? "Saving..." : "Add"}
+                  </Button>
+                </div>
+              </Card>
+            ) : (
+              <Button variant="outline" className="w-full border-dashed" onClick={() => setShowScheduleForm(true)}>
+                <Calendar className="w-4 h-4 mr-2" />
+                Add to Schedule
+              </Button>
+            )}
+
             {schedule.map((item) => (
               <Card key={item.id} className="p-4">
                 <div className="flex items-start gap-3">
@@ -461,15 +580,14 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
                   <div className="flex-1">
                     <p className="font-medium">{item.title}</p>
                     <p className="text-sm text-muted-foreground">{item.time}</p>
-                    {item.location && <p className="text-xs text-muted-foreground mt-1">{item.location}</p>}
+                    {item.location && <p className="text-xs text-muted-foreground mt-1">📍 {item.location}</p>}
                     {item.notes && <p className="text-xs text-muted-foreground mt-2">{item.notes}</p>}
                   </div>
                 </div>
               </Card>
             ))}
-            {schedule.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">
-                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            {schedule.length === 0 && !showScheduleForm && (
+              <div className="text-center py-8 text-muted-foreground text-sm">
                 <p>No events scheduled yet</p>
               </div>
             )}

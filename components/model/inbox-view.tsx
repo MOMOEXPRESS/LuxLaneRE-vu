@@ -179,7 +179,7 @@ export function InboxView({ onViewProfile, initialConversationId, onConversation
               : "border-transparent text-muted-foreground"
           }`}
         >
-          Bookings
+          {user?.role === "brand" || user?.role === "agency" || user?.role === "client" ? "Castings" : "Bookings"}
           {bookingApplications.length > 0 && (
             <span className="absolute top-2 ml-1 px-1.5 py-0.5 text-[10px] bg-foreground text-background rounded-full">
               {bookingApplications.length}
