@@ -33,6 +33,7 @@ import {
   UserCircle,
   Send,
   Loader2,
+  CheckCircle,
 } from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
 import { SettingsView } from "@/components/settings/settings-view"
@@ -1210,6 +1211,27 @@ function ApplicationCard({
                     {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4 mr-1" />}
                     Decline
                   </Button>
+                </div>
+              )}
+
+              {application.status === "offered" && (
+                <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400 text-sm text-center">
+                  Offer sent — waiting for model's response
+                </div>
+              )}
+
+              {application.status === "accepted" && (
+                <div className="flex gap-2">
+                  <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleAction("CONFIRMED")} disabled={updating}>
+                    {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-1" />}
+                    Confirm Booking
+                  </Button>
+                </div>
+              )}
+
+              {application.status === "confirmed" && (
+                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm text-center font-medium">
+                  ✓ Booking Confirmed
                 </div>
               )}
             </div>

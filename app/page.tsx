@@ -216,7 +216,7 @@ export default function Home() {
           onBack={goBack}
           onViewProfile={viewProfile}
           onViewCasting={(c) => navigateTo("casting", { casting: c })}
-          onOpenRoom={isCreator ? handleOpenRoom : undefined}
+          onOpenRoom={handleOpenRoom}
         />
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} unreadCount={unreadCount} />
       </div>

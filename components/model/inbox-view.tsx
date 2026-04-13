@@ -678,6 +678,23 @@ function BookingCard({ application }: { application: CastingApplication }) {
           </span>
         )}
       </div>
+      {/* Status-specific messages */}
+      {application.status === "accepted" && (
+        <p className="text-xs text-amber-400 mt-1">Awaiting brand confirmation</p>
+      )}
+      {application.status === "confirmed" && (
+        <Button
+          size="sm"
+          className="w-full mt-2"
+          onClick={() => {
+            // Navigate to casting room via casting detail
+            window.location.href = `/?view=casting&id=${application.castingId}`
+          }}
+        >
+          <MessageSquare className="w-4 h-4 mr-1" />
+          Enter Casting Room
+        </Button>
+      )}
     </Card>
   )
 }

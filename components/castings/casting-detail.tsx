@@ -336,6 +336,19 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
     if (isModel) {
       if (hasApplied) {
         const statusInfo = getStatusDisplay(appliedStatus || "applied")
+        const statusMessage = (() => {
+          switch (appliedStatus) {
+            case "pending": case "applied": return "The casting director will review your application."
+            case "shortlisted": return "You've been shortlisted! Stay tuned for next steps."
+            case "offered": return "You've received an offer! Check Inbox → Bookings to respond."
+            case "accepted": return "You accepted the offer. Awaiting brand confirmation."
+            case "confirmed": return "Your booking is confirmed! Enter the casting room to coordinate."
+            case "declined": return "You declined this offer."
+            case "rejected": return "This casting wasn't a match. Keep applying!"
+            default: return "Your application is being processed."
+          }
+        })()
+
         return (
           <div className="space-y-2">
             <Card className={`p-4 border ${statusInfo.bgColor}`}>
@@ -343,20 +356,17 @@ export function CastingDetail({ casting, onBack, onApply, onViewProfile, onViewC
                 <Check className={`w-5 h-5 ${statusInfo.color}`} />
                 <div className="flex-1">
                   <p className={`font-medium ${statusInfo.color}`}>{statusInfo.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {appliedStatus === "pending" || appliedStatus === "applied"
-                      ? "The casting director will review your application."
-                      : appliedStatus === "shortlisted"
-                        ? "You've been shortlisted! Stay tuned for next steps."
-                        : appliedStatus === "accepted"
-                          ? "Congratulations! Check your inbox for details."
-                          : appliedStatus === "rejected"
-                            ? "This casting wasn't a match. Keep applying!"
-                            : "Your application is being processed."}
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{statusMessage}</p>
                 </div>
               </div>
             </Card>
+            {/* Enter Casting Room button for confirmed bookings */}
+            {appliedStatus === "confirmed" && onOpenRoom && (
+              <Button className="w-full h-12" size="lg" onClick={onOpenRoom}>
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Enter Casting Room
+              </Button>
+            )}
           </div>
         )
       }
