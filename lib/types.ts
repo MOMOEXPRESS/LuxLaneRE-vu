@@ -276,6 +276,9 @@ export interface Notification {
     castingId?: string
     roomId?: string
     userId?: string
+    relatedId?: string
+    relatedType?: string
+    [key: string]: unknown
   }
   createdAt: Date
 }

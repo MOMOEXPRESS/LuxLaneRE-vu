@@ -387,7 +387,7 @@ function NotificationItem({ notification, onRead, onAgencyRespond }: { notificat
                 onClick={(e) => {
                   e.stopPropagation()
                   setResponding(true)
-                  onAgencyRespond(notification.metadata.relatedId, "reject")
+                  onAgencyRespond(notification.metadata!.relatedId!, "reject")
                 }}
               >
                 <X className="w-3 h-3 mr-1" /> Decline
@@ -398,7 +398,7 @@ function NotificationItem({ notification, onRead, onAgencyRespond }: { notificat
                 onClick={(e) => {
                   e.stopPropagation()
                   setResponding(true)
-                  onAgencyRespond(notification.metadata.relatedId, "accept")
+                  onAgencyRespond(notification.metadata!.relatedId!, "accept")
                 }}
               >
                 <Check className="w-3 h-3 mr-1" /> Accept

@@ -85,11 +85,14 @@ export function ProfileView({
   const [dbPortfolio, setDbPortfolio] = useState<Array<{ id: string; url: string; type: string; meta?: any }>>([])
   const [dbPosts, setDbPosts] = useState<Array<{ id: string; imageUrl: string; caption?: string | null; createdAt: string }>>([])
 
+  // Resolve the user (prop or current auth user)
+  const resolvedUserId = profileUser?.id || currentUser?.id
+
   // Fetch portfolio + posts from DB on mount and after updates
   const fetchProfileData = useCallback(async () => {
-    if (!user?.id) return
+    if (!resolvedUserId) return
     // Portfolio
-    const mediaRes = await api.getMedia(user.id, "PORTFOLIO")
+    const mediaRes = await api.getMedia(resolvedUserId, "PORTFOLIO")
     const mediaData = mediaRes.data as { media?: Array<{ id: string; url: string; type: string; meta?: any }> } | undefined
     if (mediaData?.media) setDbPortfolio(mediaData.media)
 
@@ -97,9 +100,9 @@ export function ProfileView({
     const postsRes = await api.getPosts({ limit: 50 })
     const postsData = postsRes.data as { posts?: Array<{ id: string; userId: string; imageUrl: string; caption?: string | null; createdAt: string }> } | undefined
     if (postsData?.posts) {
-      setDbPosts(postsData.posts.filter((p) => p.userId === user.id))
+      setDbPosts(postsData.posts.filter((p) => p.userId === resolvedUserId))
     }
-  }, [user?.id])
+  }, [resolvedUserId])
 
   useEffect(() => {
     fetchProfileData()
