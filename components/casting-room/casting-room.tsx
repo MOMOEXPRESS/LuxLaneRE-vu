@@ -14,6 +14,8 @@ import {
   MoreVertical,
   CheckCheck,
   ImageIcon,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -104,7 +106,10 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
   const [messages, setMessages] = useState<ApiRoomMessage[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Schedule form state
+  // Schedule calendar state
+  const [calYear, setCalYear] = useState(new Date().getFullYear())
+  const [calMonth, setCalMonth] = useState(new Date().getMonth())
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showScheduleForm, setShowScheduleForm] = useState(false)
   const [scheduleTitle, setScheduleTitle] = useState("")
   const [scheduleDate, setScheduleDate] = useState("")
@@ -522,76 +527,142 @@ export function CastingRoomView({ room, onBack, onViewProfile }: CastingRoomView
           </div>
         </TabsContent>
 
-        {/* Schedule */}
-        <TabsContent value="schedule" className="flex-1 overflow-auto mt-0 p-4">
-          <div className="space-y-3">
-            {/* Add schedule form */}
-            {showScheduleForm ? (
-              <Card className="p-4 space-y-3 border-foreground/20">
-                <h4 className="font-semibold text-sm">Add Schedule Item</h4>
-                <Input
-                  placeholder="Title (e.g. Fitting, Shoot Day 1)"
-                  value={scheduleTitle}
-                  onChange={(e) => setScheduleTitle(e.target.value)}
-                />
-                <div className="grid grid-cols-2 gap-2">
+        {/* Schedule — Calendar View */}
+        <TabsContent value="schedule" className="flex-1 overflow-auto mt-0 p-3">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-3">
+            <Button variant="ghost" size="icon" onClick={() => {
+              if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1) }
+              else setCalMonth(calMonth - 1)
+            }}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <h3 className="font-semibold text-sm">
+              {new Date(calYear, calMonth).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </h3>
+            <Button variant="ghost" size="icon" onClick={() => {
+              if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1) }
+              else setCalMonth(calMonth + 1)
+            }}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Day headers */}
+          <div className="grid grid-cols-7 text-center mb-1">
+            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+              <span key={d} className="text-[10px] text-muted-foreground font-medium py-1">{d}</span>
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div className="grid grid-cols-7 gap-0.5 mb-4">
+            {(() => {
+              const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate()
+              const firstDay = new Date(calYear, calMonth, 1).getDay()
+              const cells = []
+              // Empty cells before first day
+              for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />)
+              // Day cells
+              for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+                const dayEvents = schedule.filter((s) => s.date === dateStr)
+                const isSelected = selectedDate === dateStr
+                const isToday = dateStr === format(new Date(), "yyyy-MM-dd")
+                cells.push(
+                  <button
+                    key={day}
+                    onClick={() => { setSelectedDate(isSelected ? null : dateStr); setShowScheduleForm(false) }}
+                    className={`aspect-square rounded-lg flex flex-col items-center justify-center text-sm relative transition-colors ${
+                      isSelected ? "bg-foreground text-background" :
+                      isToday ? "bg-muted ring-1 ring-foreground/30" :
+                      "hover:bg-muted/50"
+                    }`}
+                  >
+                    <span className={`font-medium ${isSelected ? "" : ""}`}>{day}</span>
+                    {dayEvents.length > 0 && (
+                      <div className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? "bg-background" : "bg-violet-500"}`} />
+                    )}
+                  </button>
+                )
+              }
+              return cells
+            })()}
+          </div>
+
+          {/* Selected date — events + add form */}
+          {selectedDate && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-sm">
+                  {format(new Date(selectedDate + "T00:00:00"), "EEEE, MMMM d")}
+                </h4>
+                <Button size="sm" variant="outline" onClick={() => {
+                  setScheduleDate(selectedDate)
+                  setShowScheduleForm(true)
+                }}>
+                  + Add
+                </Button>
+              </div>
+
+              {/* Events for this date */}
+              {schedule.filter((s) => s.date === selectedDate).map((item) => (
+                <Card key={item.id} className="p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-1 h-full min-h-[40px] rounded-full bg-violet-500 shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.time}</p>
+                      {item.location && <p className="text-xs text-muted-foreground mt-1">📍 {item.location}</p>}
+                      {item.notes && <p className="text-xs text-muted-foreground mt-1">{item.notes}</p>}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+
+              {schedule.filter((s) => s.date === selectedDate).length === 0 && !showScheduleForm && (
+                <p className="text-sm text-muted-foreground text-center py-4">No events on this day</p>
+              )}
+
+              {/* Add event form */}
+              {showScheduleForm && (
+                <Card className="p-4 space-y-3 border-foreground/20">
                   <Input
-                    type="date"
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
+                    placeholder="Title (e.g. Fitting, Shoot Day 1)"
+                    value={scheduleTitle}
+                    onChange={(e) => setScheduleTitle(e.target.value)}
+                    autoFocus
                   />
                   <Input
                     type="time"
                     value={scheduleTime}
                     onChange={(e) => setScheduleTime(e.target.value)}
                   />
-                </div>
-                <Input
-                  placeholder="Location (optional)"
-                  value={scheduleLocation}
-                  onChange={(e) => setScheduleLocation(e.target.value)}
-                />
-                <Input
-                  placeholder="Notes (optional)"
-                  value={scheduleNotes}
-                  onChange={(e) => setScheduleNotes(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => setShowScheduleForm(false)}>Cancel</Button>
-                  <Button className="flex-1" onClick={handleAddScheduleItem} disabled={scheduleSaving || !scheduleTitle || !scheduleDate || !scheduleTime}>
-                    {scheduleSaving ? "Saving..." : "Add"}
-                  </Button>
-                </div>
-              </Card>
-            ) : (
-              <Button variant="outline" className="w-full border-dashed" onClick={() => setShowScheduleForm(true)}>
-                <Calendar className="w-4 h-4 mr-2" />
-                Add to Schedule
-              </Button>
-            )}
+                  <Input
+                    placeholder="Location (optional)"
+                    value={scheduleLocation}
+                    onChange={(e) => setScheduleLocation(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Notes (optional)"
+                    value={scheduleNotes}
+                    onChange={(e) => setScheduleNotes(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => setShowScheduleForm(false)}>Cancel</Button>
+                    <Button className="flex-1" onClick={handleAddScheduleItem} disabled={scheduleSaving || !scheduleTitle || !scheduleTime}>
+                      {scheduleSaving ? "Saving..." : "Add"}
+                    </Button>
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
 
-            {schedule.map((item) => (
-              <Card key={item.id} className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-lg bg-muted flex flex-col items-center justify-center shrink-0">
-                    <span className="text-lg font-bold">{format(new Date(item.date), "d")}</span>
-                    <span className="text-[10px] text-muted-foreground uppercase">{format(new Date(item.date), "MMM")}</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium">{item.title}</p>
-                    <p className="text-sm text-muted-foreground">{item.time}</p>
-                    {item.location && <p className="text-xs text-muted-foreground mt-1">📍 {item.location}</p>}
-                    {item.notes && <p className="text-xs text-muted-foreground mt-2">{item.notes}</p>}
-                  </div>
-                </div>
-              </Card>
-            ))}
-            {schedule.length === 0 && !showScheduleForm && (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                <p>No events scheduled yet</p>
-              </div>
-            )}
-          </div>
+          {/* No date selected hint */}
+          {!selectedDate && schedule.length === 0 && (
+            <p className="text-center text-sm text-muted-foreground py-4">Tap a date to view or add events</p>
+          )}
         </TabsContent>
       </Tabs>
     </div>
